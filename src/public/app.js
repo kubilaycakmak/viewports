@@ -407,6 +407,7 @@ function createViewportCard(device) {
   });
 
   iframe.src = iframeSrc(state.url);
+  iframeWrap.append(loading, error, iframe);
   card.append(header, iframeWrap);
   scaler.appendChild(card);
   wrapper.appendChild(scaler);
