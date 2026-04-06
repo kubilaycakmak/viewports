@@ -66,7 +66,11 @@ export async function startServer({ targetUrl, port, openBrowser: shouldOpen }) 
   console.log('  \x1b[35m◈ viewports\x1b[0m  by \x1b[36mkubilaycakmak\x1b[0m  ⚡');
   console.log('');
   console.log(`  \x1b[2mServer:\x1b[0m  \x1b[36m${appUrl}\x1b[0m`);
-  if (targetUrl) console.log(`  \x1b[2mTarget:\x1b[0m  \x1b[36m${targetUrl}\x1b[0m`);
+  if (targetUrl) {
+    console.log(`  \x1b[2mTarget:\x1b[0m  \x1b[36m${targetUrl}\x1b[0m`);
+  } else {
+    console.log(`  \x1b[2mTarget:\x1b[0m  \x1b[33mnot set — enter a URL in the toolbar\x1b[0m`);
+  }
   console.log('');
   console.log('  \x1b[2mPress Ctrl+C to stop\x1b[0m');
   console.log('');

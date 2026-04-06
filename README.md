@@ -166,6 +166,9 @@ Released under the [MIT License](./LICENSE.md).
 
 ## 📋 Changelog
 
+### v2.1.0
+- 🔍 **Auto-detect project URL** — reads `package.json` scripts to detect framework port automatically (Vite, Next.js, Angular, Nuxt, Astro, CRA, Vue CLI, Parcel...)
+
 ### v2.0.0
 - ♻️ **Zero dependencies** — removed `express`, `commander`, `open`; replaced with Node.js built-ins only
 - ⚡ No `node_modules`, instant `npx` startup
