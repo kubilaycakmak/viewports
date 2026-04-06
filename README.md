@@ -25,8 +25,8 @@ npx @kubilaycakmak/viewports http://localhost:3000
 
 <br/>
 
-<!-- Replace this with an actual screenshot after first run -->
-![viewports preview](https://placehold.co/900x480/0e0e11/7c6afe?text=◈+viewports+—+responsive+preview+tool&font=mono)
+<!-- After taking a screenshot with the built-in 📷 button, save it to docs/screenshot.png -->
+![viewports preview](https://raw.githubusercontent.com/kubilaycakmak/viewports/main/docs/screenshot.png)
 
 <br/>
 
@@ -134,39 +134,6 @@ Options:
 | `Ctrl / ⌘` + `Scroll` | Zoom canvas in / out |
 | `Ctrl / ⌘` + `R` | Reload all viewports |
 | `Escape` | Close modal |
-
----
-
-## 🎨 Interface
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  ◈ viewports   [ https://localhost:3000 ] [Load]   − 50% + Fit │
-├─────────────────────────────────────────────────────────────────┤
-│  Mobile: [iPhone SE] [iPhone 14] [•iPhone 14 Pro Max]  Tablet: │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│   ┌────────────┐        ┌──────────────────┐                  │
-│   │ mobile     │        │ tablet            │                  │
-│   │ iPhone 14  │        │ iPad Mini         │                  │
-│   │ 390×844   │        │ 768×1024         │                  │
-│   │           │        │                   │                  │
-│   │  (iframe) │        │    (iframe)        │                  │
-│   │           │        │                   │                  │
-│   └────────────┘        └──────────────────┘                  │
-│                                                                 │
-│            ┌──────────────────────────────────┐               │
-│            │ laptop · MacBook 14" · 1512×982  │               │
-│            │               (iframe)            │               │
-│            └──────────────────────────────────┘               │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-- **Drag** the ⠿ grip handle to reposition any window freely
-- **Click** any window to bring it to front
-- **Fit** auto-arranges everything into a neat row with a smooth animation
-
----
 
 ## 📸 Marketing Screenshots
 
