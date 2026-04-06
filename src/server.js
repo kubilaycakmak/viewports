@@ -140,11 +140,17 @@ export async function startServer({ targetUrl, port, openBrowser: shouldOpen }) 
                 return res.end(proxyErrorHtml(targetUrl, 'Stream error: ' + e.message));
               }
               let html = Buffer.concat(chunks).toString('utf8');
-              // Inject <base> so relative assets resolve to target origin
-              if (!/<base\b/i.test(html)) {
-                html = html.replace(/(<head[^>]*>)/i, `$1<base href="${targetUrl}">`);
-                if (!html.includes('<base')) html = `<base href="${targetUrl}">` + html;
-              }
+              // Always set base href to target origin so JS/CSS assets resolve correctly.
+              // Remove any existing <base> tag first (e.g. <base href="/">) then inject ours.
+              html = html.replace(/<base[^>]*>/gi, '');
+              html = html.replace(/(<head[^>]*>)/i, `$1<base href="${targetUrl}">`);
+              if (!html.includes('<base')) html = `<base href="${targetUrl}">` + html;
+              // Fix SPA routing: reset pathname to '/' so React/Vue/etc routers
+              // don't try to match '/dev-proxy' as a route and render blank
+              const spaFix = `<script>(function(){try{` +
+                `history.replaceState(null,'','/');` +
+                `}catch(e){}}());</script>`;
+              html = html.replace(/(<head[^>]*>)/i, `$1${spaFix}`);
               delete headers['content-length'];
               res.writeHead(proxyRes.statusCode, headers);
               res.end(html);

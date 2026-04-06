@@ -818,12 +818,16 @@ async function init() {
           .catch(() => {});
       }
     }
-    // Different sessionId = server was restarted → reset layout
+    // Different sessionId = server was restarted → reset layout + restore devices if empty
     if (sessionId && sessionId !== state.sessionId) {
       state.positions = {};
       state.zIndices  = {};
       state.maxZ      = 10;
       state.sessionId = sessionId;
+      // If all devices were removed in a previous session, restore defaults
+      if (state.activeIds.length === 0) {
+        state.activeIds = [...DEFAULT_ACTIVE];
+      }
       newSession = true;
     }
   } catch (_) { /* offline / dev */ }
