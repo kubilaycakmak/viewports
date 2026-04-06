@@ -1,0 +1,41 @@
+{
+  "name": "viewports",
+  "version": "1.0.0",
+  "description": "Responsive preview tool — see your site at every screen size simultaneously",
+  "type": "module",
+  "bin": {
+    "viewports": "./bin/viewports.js"
+  },
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node bin/viewports.js",
+    "dev": "node bin/viewports.js http://localhost:3000"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "express": "^4.19.2",
+    "open": "^10.1.0"
+  },
+  "keywords": [
+    "responsive",
+    "viewport",
+    "testing",
+    "developer-tools",
+    "frontend",
+    "preview",
+    "breakpoints"
+  ],
+  "author": "Kubilay Cakmak <kubilaycakmak@github> (https://github.com/kubilaycakmak)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kubilaycakmak/viewports"
+  },
+  "homepage": "https://github.com/kubilaycakmak/viewports#readme",
+  "bugs": {
+    "url": "https://github.com/kubilaycakmak/viewports/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
