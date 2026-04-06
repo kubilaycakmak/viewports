@@ -26,7 +26,7 @@ npx @kubilaycakmak/viewports http://localhost:3000
 <br/>
 
 <!-- After taking a screenshot with the built-in 📷 button, save it to docs/screenshot.png -->
-![viewports preview](https://raw.githubusercontent.com/kubilaycakmak/viewports/main/docs/screenshot.png)
+![viewports preview](https://raw.githubusercontent.com/kubilaycakmak/viewports/master/docs/screenshot.png)
 
 <br/>
 
