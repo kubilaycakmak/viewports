@@ -437,7 +437,17 @@ function updateCardLayout(wrapper, device) {
 function setUrl(url) {
   state.url = url.trim();
   saveState();
-  renderCanvas();
+
+  // Update src on ALL existing iframes — renderCanvas reuses DOM nodes
+  // so without this, old iframes keep showing the previous URL.
+  document.querySelectorAll('#canvasInner iframe').forEach((iframe) => {
+    const wrap = iframe.closest('.viewport-iframe-wrap');
+    wrap?.querySelector('.viewport-loading')?.classList.remove('hidden');
+    wrap?.querySelector('.viewport-error')?.classList.remove('visible');
+    iframe.src = state.url;
+  });
+
+  renderCanvas(); // handles newly activated devices (no existing iframe yet)
 }
 
 function loadUrl() {

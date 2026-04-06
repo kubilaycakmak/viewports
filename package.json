@@ -4,7 +4,7 @@
   "description": "Responsive preview tool — see your site at every screen size simultaneously",
   "type": "module",
   "bin": {
-    "viewports": "./bin/viewports.js"
+    "viewports": "bin/viewports.js"
   },
   "main": "src/server.js",
   "scripts": {
@@ -25,11 +25,11 @@
     "preview",
     "breakpoints"
   ],
-  "author": "Kubilay Cakmak <kubilaycakmak@github> (https://github.com/kubilaycakmak)",
+  "author": "Kubilay Cakmak (https://github.com/kubilaycakmak)",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kubilaycakmak/viewports"
+    "url": "git+https://github.com/kubilaycakmak/viewports.git"
   },
   "homepage": "https://github.com/kubilaycakmak/viewports#readme",
   "bugs": {
