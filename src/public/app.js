@@ -51,9 +51,9 @@ const ALL_DEVICES = DEVICE_GROUPS.flatMap((g) => g.devices);
 
 // ─── State ─────────────────────────────────────────────────────────────────
 
-const STORAGE_KEY = 'viewports_state_v1';
+const STORAGE_KEY = 'viewports_state_v2'; // v2: canvas-transform zoom (natural coords)
 const HEADER_HEIGHT = 40; // px — viewport card header
-const ZOOM_LEVELS = [0.2, 0.25, 0.33, 0.4, 0.5, 0.6, 0.67, 0.75, 1.0];
+const ZOOM_LEVELS = [0.1, 0.15, 0.2, 0.25, 0.33, 0.4, 0.5, 0.6, 0.67, 0.75, 1.0, 1.25, 1.5, 2.0];
 const DEFAULT_ACTIVE = ['iphone-14', 'ipad-mini', 'laptop-1280', 'macbook-14', 'desktop-hd'];
 
 function loadState() {
@@ -270,7 +270,7 @@ function ensurePosition(device) {
   // Find rightmost edge of existing cards to place next to them
   let curX = PAD;
   let curY = PAD;
-  const CANVAS_MAX_W = 1800; // wrap to next row beyond this
+  const CANVAS_MAX_W = 3600; // natural pixels — wrap to next row beyond this
 
   state.activeIds.forEach((id) => {
     if (id === device.id) return;
@@ -278,7 +278,7 @@ function ensurePosition(device) {
     const d   = getAllDevices().find((x) => x.id === id);
     if (!pos || !d) return;
     const { w } = getEffectiveDims(d);
-    const right = pos.x + Math.round(w * state.zoom) + GAP;
+    const right = pos.x + w + GAP; // natural coords
     if (right < CANVAS_MAX_W) {
       curX = Math.max(curX, right);
       curY = Math.min(curY, pos.y);
@@ -298,9 +298,12 @@ function bringToFront(id) {
 }
 
 function updateCanvasSize() {
-  const canvasInner = document.getElementById('canvasInner');
+  const canvasInner  = document.getElementById('canvasInner');
+  const canvasScroll = document.getElementById('canvasScroll');
+  const canvasEl     = document.getElementById('canvas');
   if (!canvasInner) return;
 
+  const zoom = state.zoom;
   let maxRight  = 400;
   let maxBottom = 300;
 
@@ -309,12 +312,26 @@ function updateCanvasSize() {
     const device = getAllDevices().find((d) => d.id === id);
     if (!pos || !device) return;
     const { w, h } = getEffectiveDims(device);
-    maxRight  = Math.max(maxRight,  pos.x + Math.round(w * state.zoom));
-    maxBottom = Math.max(maxBottom, pos.y + Math.round((h + HEADER_HEIGHT) * state.zoom));
+    // Positions are natural (unscaled) coordinates
+    maxRight  = Math.max(maxRight,  pos.x + w);
+    maxBottom = Math.max(maxBottom, pos.y + h + HEADER_HEIGHT);
   });
 
-  canvasInner.style.width  = `${maxRight  + 80}px`;
-  canvasInner.style.height = `${maxBottom + 80}px`;
+  // Natural canvas size (minimum = viewport / zoom so canvas always fills view)
+  const minNatW = canvasEl ? Math.ceil(canvasEl.clientWidth  / zoom) : 800;
+  const minNatH = canvasEl ? Math.ceil(canvasEl.clientHeight / zoom) : 600;
+  const natW = Math.max(maxRight  + 80, minNatW);
+  const natH = Math.max(maxBottom + 80, minNatH);
+
+  canvasInner.style.width     = `${natW}px`;
+  canvasInner.style.height    = `${natH}px`;
+  canvasInner.style.transform = `scale(${zoom})`;
+
+  // Scroll spacer: sized to the visual (scaled) dimensions so scrollbars work
+  if (canvasScroll) {
+    canvasScroll.style.width  = `${Math.ceil(natW * zoom)}px`;
+    canvasScroll.style.height = `${Math.ceil(natH * zoom)}px`;
+  }
 }
 
 function createViewportCard(device) {
@@ -429,12 +446,11 @@ function createViewportCard(device) {
 
 function updateCardLayout(wrapper, device) {
   const { w, h } = getEffectiveDims(device);
-  const zoom = state.zoom;
 
-  const scaler    = wrapper.querySelector('.viewport-scaler');
+  const scaler     = wrapper.querySelector('.viewport-scaler');
   const iframeWrap = wrapper.querySelector('.viewport-iframe-wrap');
-  const iframe    = wrapper.querySelector('iframe');
-  const dimsEl    = wrapper.querySelector('.viewport-dims');
+  const iframe     = wrapper.querySelector('iframe');
+  const dimsEl     = wrapper.querySelector('.viewport-dims');
 
   if (dimsEl) dimsEl.textContent = `${w}×${h}`;
 
@@ -445,11 +461,10 @@ function updateCardLayout(wrapper, device) {
   iframe.style.width  = `${w}px`;
   iframe.style.height = `${h}px`;
 
-  scaler.style.transform = `scale(${zoom})`;
-
-  // Outer wrapper occupies the scaled footprint
-  wrapper.style.width  = `${Math.round(w * zoom)}px`;
-  wrapper.style.height = `${Math.round((h + HEADER_HEIGHT) * zoom)}px`;
+  // No per-card zoom — canvas itself is scaled via CSS transform
+  scaler.style.transform = '';
+  wrapper.style.width  = `${w}px`;
+  wrapper.style.height = `${h + HEADER_HEIGHT}px`;
 }
 
 // ─── Actions ───────────────────────────────────────────────────────────────
@@ -542,14 +557,10 @@ function reloadAll() {
 }
 
 function setZoom(zoom) {
-  state.zoom = Math.max(0.2, Math.min(1.0, zoom));
+  state.zoom = Math.max(0.1, Math.min(2.0, zoom));
   document.getElementById('zoomLabel').textContent = `${Math.round(state.zoom * 100)}%`;
   saveState();
-  getActiveDevices().forEach((device) => {
-    const wrapper = document.querySelector(`.viewport-wrapper[data-id="${device.id}"]`);
-    if (wrapper) updateCardLayout(wrapper, device);
-  });
-  updateCanvasSize();
+  updateCanvasSize(); // applies transform to canvasInner + updates scroll spacer
 }
 
 function fitToScreen() {
@@ -567,7 +578,7 @@ function fitToScreen() {
 
   const scaleW = (canvasW - PAD * 2) / totalNatW;
   const scaleH = (canvasH - PAD * 2) / maxNatH;
-  const fit    = Math.min(scaleW, scaleH, 1.0);
+  const fit    = Math.min(scaleW, scaleH, 2.0);
   const snapped = ZOOM_LEVELS.reduce((a, b) =>
     Math.abs(b - fit) < Math.abs(a - fit) ? b : a
   );
@@ -575,12 +586,12 @@ function fitToScreen() {
   state.zoom = snapped;
   document.getElementById('zoomLabel').textContent = `${Math.round(snapped * 100)}%`;
 
-  // Compute new positions (single row)
+  // Compute new positions in NATURAL (unscaled) coordinates
   let curX = PAD;
   const newPositions = {};
   active.forEach((device) => {
     newPositions[device.id] = { x: snap(curX), y: PAD };
-    curX += Math.round(getEffectiveDims(device).w * snapped) + GAP;
+    curX += getEffectiveDims(device).w + GAP; // natural width, no zoom factor
   });
 
   // Animate cards to their new positions
@@ -717,8 +728,11 @@ function initDrag(wrapper, deviceId) {
     });
 
     function onMove(e) {
-      const dx = e.clientX - startMouseX;
-      const dy = e.clientY - startMouseY;
+      // Mouse delta is in screen pixels; canvas is scaled by zoom,
+      // so divide to get natural canvas pixel delta.
+      const zoom = state.zoom;
+      const dx = (e.clientX - startMouseX) / zoom;
+      const dy = (e.clientY - startMouseY) / zoom;
       const x  = Math.max(0, startPos.x + dx);
       const y  = Math.max(0, startPos.y + dy);
 
@@ -883,11 +897,30 @@ async function init() {
     fitToScreen();
   });
 
-  // Scroll-to-zoom on canvas
+  // Scroll-to-zoom: zoom toward cursor position (Figma-style)
   document.getElementById('canvas').addEventListener('wheel', (e) => {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
+      const canvas = e.currentTarget;
+      const rect   = canvas.getBoundingClientRect();
+
+      // Mouse position relative to canvas viewport
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      // Natural canvas coordinate currently under the cursor
+      const natX = (mouseX + canvas.scrollLeft) / state.zoom;
+      const natY = (mouseY + canvas.scrollTop)  / state.zoom;
+
+      const oldZoom = state.zoom;
       zoomStep(e.deltaY < 0 ? 1 : -1);
+      const newZoom = state.zoom;
+
+      if (newZoom !== oldZoom) {
+        // Adjust scroll so the same natural point stays under cursor
+        canvas.scrollLeft = natX * newZoom - mouseX;
+        canvas.scrollTop  = natY * newZoom - mouseY;
+      }
     }
   }, { passive: false });
 

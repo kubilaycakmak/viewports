@@ -88,7 +88,11 @@
 
   <!-- Viewport canvas -->
   <main class="canvas" id="canvas">
-    <div class="canvas-inner" id="canvasInner"></div>
+    <!-- #canvasScroll sizes itself to natW*zoom × natH*zoom so scrolling works
+         with a CSS-transformed inner. #canvasInner gets transform:scale(zoom). -->
+    <div id="canvasScroll">
+      <div class="canvas-inner" id="canvasInner"></div>
+    </div>
   </main>
 
   <!-- Custom device modal -->

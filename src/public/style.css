@@ -282,10 +282,19 @@ html, body {
   background-size: 28px 28px;
 }
 
-.canvas-inner {
+#canvasScroll {
   position: relative;
   min-width: 100%;
   min-height: 100%;
+  /* width/height set by JS to natW*zoom × natH*zoom for correct scroll area */
+}
+
+.canvas-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  /* width/height and transform set dynamically by JS (natural coords) */
 }
 
 body {
