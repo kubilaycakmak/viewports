@@ -164,4 +164,20 @@ Released under the [MIT License](./LICENSE.md).
 
 ---
 
+## 📋 Changelog
+
+### v2.0.0
+- ♻️ **Zero dependencies** — removed `express`, `commander`, `open`; replaced with Node.js built-ins only
+- ⚡ No `node_modules`, instant `npx` startup
+- 🔒 Zero supply-chain attack surface
+
+### v1.x
+- `1.0.5` — Fixed npm README rendering (pure markdown)
+- `1.0.3` — Excluded `docs/` from npm package
+- `1.0.2` — Screenshot feature, URL change bug fix
+- `1.0.1` — Professional window borders, spring animations
+- `1.0.0` — Initial release
+
+---
+
 If this tool saved you time, consider giving it a ⭐ on [GitHub](https://github.com/kubilaycakmak/viewports)!
