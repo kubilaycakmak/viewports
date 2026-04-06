@@ -1,6 +1,6 @@
 {
   "name": "@kubilaycakmak/viewports",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Responsive preview tool — see your site at every screen size simultaneously",
   "type": "module",
   "bin": {
