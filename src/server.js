@@ -45,19 +45,53 @@ function openBrowser(url) {
 
 export async function startServer({ targetUrl, port, openBrowser: shouldOpen }) {
   const publicDir = join(__dirname, 'public');
+  // Unique session token — changes every server restart so frontend resets layout
+  const sessionId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
   const server = createServer(async (req, res) => {
     // API: config
     if (req.url === '/api/config') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       // fromCli=true tells the frontend to override localStorage with this URL
-      return res.end(JSON.stringify({ targetUrl: targetUrl || '', fromCli: !!targetUrl }));
+      // sessionId changes every restart so frontend knows to reset layout
+      return res.end(JSON.stringify({ targetUrl: targetUrl || '', fromCli: !!targetUrl, sessionId }));
     }
 
     // API: health
     if (req.url === '/api/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ ok: true }));
+    }
+
+    // API: probe — quick check if target URL is reachable
+    if (req.url.startsWith('/api/probe')) {
+      const params = new URL(req.url, 'http://localhost').searchParams;
+      const target = params.get('url');
+      if (!target) { res.writeHead(400); return res.end('{}'); }
+      try {
+        const t = new URL(target);
+        const requester = t.protocol === 'https:' ? httpsRequest : httpRequest;
+        const probeReq = requester(
+          { hostname: t.hostname, port: +t.port || (t.protocol === 'https:' ? 443 : 80),
+            path: '/', method: 'HEAD', timeout: 3000,
+            headers: { 'user-agent': 'viewports-probe' } },
+          (r) => {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, status: r.statusCode }));
+            r.resume();
+          }
+        );
+        probeReq.on('timeout', () => { probeReq.destroy(); });
+        probeReq.on('error', () => {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false }));
+        });
+        probeReq.end();
+      } catch {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false }));
+      }
+      return;
     }
 
     // Dev proxy: strips X-Frame-Options & CSP frame-ancestors so iframes load

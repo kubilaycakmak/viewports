@@ -67,6 +67,7 @@ function saveState() {
       rotated: state.rotated,
       customDevices: state.customDevices,
       positions: state.positions,
+      sessionId: state.sessionId,
       zIndices: state.zIndices,
       maxZ: state.maxZ,
     }));
@@ -84,6 +85,7 @@ const state = {
   positions: persisted?.positions ?? {},
   zIndices: persisted?.zIndices ?? {},
   maxZ: persisted?.maxZ ?? 10,
+  sessionId: persisted?.sessionId ?? '',
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -471,6 +473,13 @@ function loadUrl() {
     input.value = url;
   }
   setUrl(url);
+  // Probe reachability and warn if not reachable
+  fetch(`/api/probe?url=${encodeURIComponent(url)}`)
+    .then((r) => r.json())
+    .then(({ ok }) => {
+      if (!ok) showToast(`⚠ Cannot reach ${url} — is the dev server running?`, 'error');
+    })
+    .catch(() => {});
 }
 
 function toggleDevice(id) {
@@ -792,13 +801,30 @@ async function takeScreenshot() {
 async function init() {
   initToast();
 
-  // Fetch initial URL from server
-  // If CLI provided a URL (fromCli=true), it overrides localStorage
+  // Fetch config from server (URL + sessionId for layout reset detection)
+  let newSession = false;
   try {
     const res = await fetch('/api/config');
-    const { targetUrl, fromCli } = await res.json();
+    const { targetUrl, fromCli, sessionId } = await res.json();
     if (targetUrl && (fromCli || !state.url)) {
       state.url = targetUrl;
+      // Probe if CLI target is reachable
+      if (fromCli) {
+        fetch(`/api/probe?url=${encodeURIComponent(targetUrl)}`)
+          .then((r) => r.json())
+          .then(({ ok }) => {
+            if (!ok) showToast(`⚠ Cannot reach ${targetUrl} — is the dev server running?`, 'error');
+          })
+          .catch(() => {});
+      }
+    }
+    // Different sessionId = server was restarted → reset layout
+    if (sessionId && sessionId !== state.sessionId) {
+      state.positions = {};
+      state.zIndices  = {};
+      state.maxZ      = 10;
+      state.sessionId = sessionId;
+      newSession = true;
     }
   } catch (_) { /* offline / dev */ }
 
@@ -810,11 +836,10 @@ async function init() {
   renderDeviceBar();
   renderCanvas();
 
-  // Auto-arrange if: no positions saved, OR positions look degenerate
-  // (multiple cards at the same x,y — happens from old buggy state)
+  // Auto-arrange if new session, no positions, or degenerate positions
   const savedPositions = Object.values(state.positions);
   const uniqueCoords   = new Set(savedPositions.map((p) => `${p.x},${p.y}`)).size;
-  const needsArrange   = savedPositions.length === 0 || uniqueCoords < savedPositions.length;
+  const needsArrange   = newSession || savedPositions.length === 0 || uniqueCoords < savedPositions.length;
   if (needsArrange) setTimeout(() => fitToScreen(), 80);
 
   // ─── Event listeners ─────────────────────────────────────────
