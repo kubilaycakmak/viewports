@@ -1,36 +1,20 @@
-<div align="center">
+# ◈ viewports
 
-<br/>
+> See your site at every screen size — simultaneously.
 
-```
-◈ viewports
-```
-
-### See your site at every screen size — simultaneously.
-
-A zero-config developer tool that opens your localhost in **12+ device viewports** at once. Free 2D canvas, drag & drop, instant zoom, custom devices.
-
-<br/>
+A zero-config developer tool that opens your localhost in **12+ device viewports** at once.
+Free 2D canvas, drag & drop, instant zoom, custom devices.
 
 [![npm version](https://img.shields.io/npm/v/@kubilaycakmak/viewports?style=flat-square&color=7c6afe&label=npm)](https://www.npmjs.com/package/@kubilaycakmak/viewports)
 [![npm downloads](https://img.shields.io/npm/dm/@kubilaycakmak/viewports?style=flat-square&color=7c6afe)](https://www.npmjs.com/package/@kubilaycakmak/viewports)
 [![License: MIT](https://img.shields.io/badge/license-MIT-7c6afe?style=flat-square)](./LICENSE.md)
 [![Node ≥18](https://img.shields.io/badge/node-%3E%3D18-7c6afe?style=flat-square)](https://nodejs.org)
 
-<br/>
-
 ```bash
 npx @kubilaycakmak/viewports http://localhost:3000
 ```
 
-<br/>
-
-<!-- After taking a screenshot with the built-in 📷 button, save it to docs/screenshot.png -->
 ![viewports preview](https://raw.githubusercontent.com/kubilaycakmak/viewports/master/docs/screenshot.png)
-
-<br/>
-
-</div>
 
 ---
 
@@ -163,8 +147,6 @@ Please open an [issue](https://github.com/kubilaycakmak/viewports/issues) first 
 
 ## 👤 Author
 
-<div align="center">
-
 **Kubilay Cakmak** · *neo* ⚡
 
 Full-Stack Developer & Mentor · Vancouver, BC
@@ -172,8 +154,6 @@ Full-Stack Developer & Mentor · Vancouver, BC
 [![GitHub](https://img.shields.io/badge/GitHub-kubilaycakmak-7c6afe?style=flat-square&logo=github)](https://github.com/kubilaycakmak)
 
 *I like JavaScript 🍻*
-
-</div>
 
 ---
 
@@ -184,8 +164,4 @@ Released under the [MIT License](./LICENSE.md).
 
 ---
 
-<div align="center">
-
 If this tool saved you time, consider giving it a ⭐ on [GitHub](https://github.com/kubilaycakmak/viewports)!
-
-</div>
