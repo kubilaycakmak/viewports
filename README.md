@@ -12,15 +12,15 @@ A zero-config developer tool that opens your localhost in **12+ device viewports
 
 <br/>
 
-[![npm version](https://img.shields.io/npm/v/viewports?style=flat-square&color=7c6afe&label=npm)](https://www.npmjs.com/package/viewports)
-[![npm downloads](https://img.shields.io/npm/dm/viewports?style=flat-square&color=7c6afe)](https://www.npmjs.com/package/viewports)
+[![npm version](https://img.shields.io/npm/v/@kubilaycakmak/viewports?style=flat-square&color=7c6afe&label=npm)](https://www.npmjs.com/package/@kubilaycakmak/viewports)
+[![npm downloads](https://img.shields.io/npm/dm/@kubilaycakmak/viewports?style=flat-square&color=7c6afe)](https://www.npmjs.com/package/@kubilaycakmak/viewports)
 [![License: MIT](https://img.shields.io/badge/license-MIT-7c6afe?style=flat-square)](./LICENSE.md)
 [![Node ≥18](https://img.shields.io/badge/node-%3E%3D18-7c6afe?style=flat-square)](https://nodejs.org)
 
 <br/>
 
 ```bash
-npx viewports http://localhost:3000
+npx @kubilaycakmak/viewports http://localhost:3000
 ```
 
 <br/>
@@ -52,10 +52,10 @@ npx viewports http://localhost:3000
 
 ```bash
 # No install needed
-npx viewports http://localhost:3000
+npx @kubilaycakmak/viewports http://localhost:3000
 
 # Or with a custom port
-npx viewports http://localhost:5173 --port 4444
+npx @kubilaycakmak/viewports http://localhost:5173 --port 4444
 ```
 
 Your browser opens automatically with all device viewports loaded and ready.
@@ -66,13 +66,13 @@ Your browser opens automatically with all device viewports loaded and ready.
 
 **Global install** (use anywhere):
 ```bash
-npm install -g viewports
+npm install -g @kubilaycakmak/viewports
 viewports http://localhost:3000
 ```
 
 **Per-project** (recommended for teams):
 ```bash
-npm install -D viewports
+npm install -D @kubilaycakmak/viewports
 ```
 
 Then add to your `package.json`:
