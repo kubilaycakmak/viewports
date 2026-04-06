@@ -1,9 +1,15 @@
 // ─── Device Definitions ────────────────────────────────────────────────────
 
-// Route iframe through local proxy to strip X-Frame-Options / CSP headers
+// Proxy port provided by the server (transparent port-forwarding proxy).
+// When set, iframes point to http://localhost:<proxyPort>/ instead of
+// the raw target URL, so X-Frame-Options / CORS / SPA routing all just work.
+let _proxyPort = 0;
+
 function iframeSrc(url) {
   if (!url) return '';
-  return `/dev-proxy?url=${encodeURIComponent(url)}`;
+  if (_proxyPort) return `http://localhost:${_proxyPort}/`;
+  // Fallback: no proxy port (shouldn't happen in normal use)
+  return `about:blank`;
 }
 
 const DEVICE_GROUPS = [
@@ -452,8 +458,12 @@ function setUrl(url) {
   state.url = url.trim();
   saveState();
 
+  // Tell the server's transparent proxy to switch target
+  if (state.url) {
+    fetch(`/api/set-target?url=${encodeURIComponent(state.url)}`).catch(() => {});
+  }
+
   // Update src on ALL existing iframes — renderCanvas reuses DOM nodes
-  // so without this, old iframes keep showing the previous URL.
   document.querySelectorAll('#canvasInner iframe').forEach((iframe) => {
     const wrap = iframe.closest('.viewport-iframe-wrap');
     wrap?.querySelector('.viewport-loading')?.classList.remove('hidden');
@@ -806,7 +816,8 @@ async function init() {
   let newSession = false;
   try {
     const res = await fetch('/api/config');
-    const { targetUrl, fromCli, sessionId } = await res.json();
+    const { targetUrl, fromCli, sessionId, proxyPort } = await res.json();
+    if (proxyPort) _proxyPort = proxyPort;
     if (targetUrl && (fromCli || !state.url)) {
       state.url = targetUrl;
       // Probe if CLI target is reachable
