@@ -29,7 +29,8 @@ export async function startServer({ targetUrl, port, openBrowser: shouldOpen }) 
     // API: config
     if (req.url === '/api/config') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ targetUrl: targetUrl || '' }));
+      // fromCli=true tells the frontend to override localStorage with this URL
+      return res.end(JSON.stringify({ targetUrl: targetUrl || '', fromCli: !!targetUrl }));
     }
 
     // API: health

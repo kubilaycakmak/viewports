@@ -781,11 +781,12 @@ async function takeScreenshot() {
 async function init() {
   initToast();
 
-  // Fetch initial URL from server if not persisted
+  // Fetch initial URL from server
+  // If CLI provided a URL (fromCli=true), it overrides localStorage
   try {
     const res = await fetch('/api/config');
-    const { targetUrl } = await res.json();
-    if (targetUrl && !state.url) {
+    const { targetUrl, fromCli } = await res.json();
+    if (targetUrl && (fromCli || !state.url)) {
       state.url = targetUrl;
     }
   } catch (_) { /* offline / dev */ }
