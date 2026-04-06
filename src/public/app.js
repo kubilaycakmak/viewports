@@ -1,5 +1,11 @@
 // ─── Device Definitions ────────────────────────────────────────────────────
 
+// Route iframe through local proxy to strip X-Frame-Options / CSP headers
+function iframeSrc(url) {
+  if (!url) return '';
+  return `/dev-proxy?url=${encodeURIComponent(url)}`;
+}
+
 const DEVICE_GROUPS = [
   {
     label: 'Mobile',
@@ -253,18 +259,25 @@ function snap(v) { return Math.round(v / GRID) * GRID; }
 function ensurePosition(device) {
   if (state.positions[device.id]) return state.positions[device.id];
 
+  // Find rightmost edge of existing cards to place next to them
   let curX = PAD;
+  let curY = PAD;
+  const CANVAS_MAX_W = 1800; // wrap to next row beyond this
+
   state.activeIds.forEach((id) => {
     if (id === device.id) return;
     const pos = state.positions[id];
     const d   = getAllDevices().find((x) => x.id === id);
-    if (pos && d) {
-      const { w } = getEffectiveDims(d);
-      curX = Math.max(curX, pos.x + Math.round(w * state.zoom) + GAP);
+    if (!pos || !d) return;
+    const { w } = getEffectiveDims(d);
+    const right = pos.x + Math.round(w * state.zoom) + GAP;
+    if (right < CANVAS_MAX_W) {
+      curX = Math.max(curX, right);
+      curY = Math.min(curY, pos.y);
     }
   });
 
-  const pos = { x: snap(curX), y: PAD };
+  const pos = { x: snap(curX), y: snap(curY) };
   state.positions[device.id] = pos;
   return pos;
 }
@@ -391,9 +404,7 @@ function createViewportCard(device) {
     }
   });
 
-  iframe.src = state.url;
-
-  iframeWrap.append(loading, error, iframe);
+  iframe.src = iframeSrc(state.url);
   card.append(header, iframeWrap);
   scaler.appendChild(card);
   wrapper.appendChild(scaler);
@@ -444,7 +455,7 @@ function setUrl(url) {
     const wrap = iframe.closest('.viewport-iframe-wrap');
     wrap?.querySelector('.viewport-loading')?.classList.remove('hidden');
     wrap?.querySelector('.viewport-error')?.classList.remove('visible');
-    iframe.src = state.url;
+    iframe.src = iframeSrc(state.url);
   });
 
   renderCanvas(); // handles newly activated devices (no existing iframe yet)
@@ -799,6 +810,13 @@ async function init() {
   renderDeviceBar();
   renderCanvas();
 
+  // Auto-arrange if: no positions saved, OR positions look degenerate
+  // (multiple cards at the same x,y — happens from old buggy state)
+  const savedPositions = Object.values(state.positions);
+  const uniqueCoords   = new Set(savedPositions.map((p) => `${p.x},${p.y}`)).size;
+  const needsArrange   = savedPositions.length === 0 || uniqueCoords < savedPositions.length;
+  if (needsArrange) setTimeout(() => fitToScreen(), 80);
+
   // ─── Event listeners ─────────────────────────────────────────
 
   // URL form
@@ -816,6 +834,13 @@ async function init() {
   document.getElementById('zoomIn').addEventListener('click', () => zoomStep(+1));
   document.getElementById('zoomOut').addEventListener('click', () => zoomStep(-1));
   document.getElementById('fitBtn').addEventListener('click', fitToScreen);
+  document.getElementById('resetLayoutBtn').addEventListener('click', () => {
+    state.positions = {};
+    state.zIndices  = {};
+    state.maxZ      = 10;
+    saveState();
+    fitToScreen();
+  });
 
   // Scroll-to-zoom on canvas
   document.getElementById('canvas').addEventListener('wheel', (e) => {

@@ -166,6 +166,15 @@ Released under the [MIT License](./LICENSE.md).
 
 ## 📋 Changelog
 
+### v2.2.0
+- 🔧 **Proxy improvements** — follows redirects (301/302/307/308), handles connection errors gracefully with a dark-themed error page inside the iframe instead of a blank white screen
+- 📐 **Layout auto-arrange** — detects stale/degenerate positions from localStorage and automatically arranges all viewports on first load
+- 🔄 **Arrange + Reset buttons** — "Arrange" fits all devices in one animated row; "Reset" clears positions and re-arranges from scratch
+- 🐛 Fixed stream error handling in proxy (unhandled promise rejections)
+
+### v2.1.1
+- 🐛 Fixed URL override — CLI-provided URL now correctly overrides cached localStorage URL (`fromCli` flag)
+
 ### v2.1.0
 - 🔍 **Auto-detect project URL** — reads `package.json` scripts to detect framework port automatically (Vite, Next.js, Angular, Nuxt, Astro, CRA, Vue CLI, Parcel...)
 
