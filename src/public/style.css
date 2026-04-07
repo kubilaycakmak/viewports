@@ -59,6 +59,8 @@ html, body {
 .toolbar-right { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .toolbar-divider { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
 
+
+
 /* Logo */
 .logo { display: flex; align-items: center; gap: 8px; user-select: none; }
 .logo-icon { font-size: 18px; color: var(--accent); line-height: 1; }
@@ -274,19 +276,23 @@ html, body {
 .canvas {
   flex: 1;
   position: relative;
-  overflow: auto;
+  overflow: hidden;
   min-height: 0;
-  background: var(--bg);
-  background-image:
-    radial-gradient(circle at 1px 1px, var(--surface-2) 1px, transparent 0);
-  background-size: 28px 28px;
+  background-color: var(--bg);
+  touch-action: none;
 }
 
-#canvasScroll {
-  position: relative;
-  min-width: 100%;
-  min-height: 100%;
-  /* width/height set by JS to natW*zoom × natH*zoom for correct scroll area */
+/* Figma-style thin-line square grid — scaled+panned by JS */
+.canvas-dot-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--grid-line, rgba(255,255,255,0.055)) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line, rgba(255,255,255,0.055)) 1px, transparent 1px);
+  background-size: 8px 8px;
+  background-position: 0 0;
+  transition: opacity 200ms ease;
 }
 
 .canvas-inner {
@@ -294,8 +300,11 @@ html, body {
   top: 0;
   left: 0;
   transform-origin: 0 0;
-  /* width/height and transform set dynamically by JS (natural coords) */
+  will-change: transform;
 }
+/* During pan: block pointer events on inner content for maximum smoothness */
+/* During pan: block pointer events on inner content */
+.canvas.is-panning .canvas-inner { pointer-events: none; }
 
 body {
   display: flex;
@@ -353,6 +362,10 @@ body {
   position: absolute;
   /* width/height set dynamically by JS */
 }
+.viewport-wrapper.is-dragging {
+  will-change: transform;
+  z-index: 9999 !important;
+}
 
 .viewport-scaler {
   transform-origin: top left;
@@ -372,17 +385,16 @@ body {
   border-radius: var(--radius-lg);
   overflow: hidden;
   position: relative;
-  /* Layered shadow: ambient depth + subtle rim light */
   box-shadow:
-    0 0 0 1px rgba(255,255,255,0.07),          /* outer rim highlight */
-    0 0 0 1.5px rgba(0,0,0,0.55),              /* dark outer edge */
-    0 8px 24px rgba(0,0,0,0.4),                /* ambient shadow */
-    0 24px 60px rgba(0,0,0,0.3);               /* deep ambient */
-  transition:
-    box-shadow 250ms cubic-bezier(.22,1,.36,1),
-    transform  250ms cubic-bezier(.22,1,.36,1);
-  will-change: transform;
+    0 0 0 1px rgba(255,255,255,0.07),
+    0 0 0 1.5px rgba(0,0,0,0.55),
+    0 8px 24px rgba(0,0,0,0.4),
+    0 24px 60px rgba(0,0,0,0.3);
+  transition: box-shadow 250ms cubic-bezier(.22,1,.36,1);
+  will-change: auto;
   transform-origin: center center;
+  /* Isolate each card: layout/style/paint changes don't affect siblings */
+  contain: layout style paint;
 }
 
 /* Inner top-edge highlight — gives glass / depth feel */
@@ -405,10 +417,17 @@ body {
 }
 
 /* ── Dragging state ── */
-.viewport-wrapper.is-dragging { z-index: 9999 !important; }
+/* ── Canvas panning (left-click on empty canvas area) ── */
+.canvas { cursor: default; }
+.canvas.is-panning,
+.canvas.is-panning * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+
 
 .viewport-wrapper.is-dragging .viewport-card {
-  transform: scale(1.03) rotate(0.7deg);
   box-shadow:
     0 0 0 1.5px var(--accent),
     0 0 24px rgba(124,106,254,0.3),
@@ -417,26 +436,8 @@ body {
   cursor: grabbing;
 }
 
-/* ── Drop / settle animation ── */
-@keyframes card-settle {
-  0%   { transform: scale(1.03) rotate(0.7deg); }
-  55%  { transform: scale(0.985) rotate(0deg); }
-  80%  { transform: scale(1.008) rotate(0deg); }
-  100% { transform: scale(1) rotate(0deg); }
-}
-
-.viewport-wrapper.just-dropped .viewport-card {
-  animation: card-settle 500ms cubic-bezier(.34,1.56,.64,1) forwards;
-}
-
-/* ── New-card entrance animation ── */
-@keyframes card-enter {
-  from { opacity: 0; transform: scale(0.9) translateY(10px); }
-  to   { opacity: 1; transform: scale(1) translateY(0); }
-}
-
 .viewport-wrapper.entering .viewport-card {
-  animation: card-enter 320ms cubic-bezier(.34,1.56,.64,1) forwards;
+  /* no entrance animation — instant appear */
 }
 
 .viewport-header {
@@ -445,16 +446,17 @@ body {
   justify-content: space-between;
   padding: 0 10px 0 14px;
   height: 40px;
-  /* Subtle gradient for a polished chrome look */
   background: linear-gradient(180deg, var(--surface-3) 0%, var(--surface-2) 100%);
   border-bottom: 1px solid rgba(0,0,0,0.35);
-  /* Top radius matches card */
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   flex-shrink: 0;
   gap: 8px;
   position: relative;
   z-index: 2;
+  cursor: grab;
+  user-select: none;
 }
+.viewport-wrapper.is-dragging .viewport-header { cursor: grabbing; }
 
 .viewport-title {
   display: flex;
@@ -750,9 +752,6 @@ body {
 .toast.show { transform: translateX(0); opacity: 1; }
 .toast.success { border-color: rgba(62,207,142,.3); }
 .toast.error   { border-color: rgba(244,63,94,.3); }
-
-/* ─── Utilities ─────────────────────────────────────────────── */
-.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
 
 /* ─── Responsive adjustments ────────────────────────────────── */
 @media (max-width: 640px) {

@@ -9,7 +9,7 @@
 </head>
 <body>
   <!-- Toolbar -->
-  <header class="toolbar" id="toolbar">
+  <header class="toolbar">
     <div class="toolbar-left">
       <div class="logo">
         <span class="logo-icon">◈</span>
@@ -18,7 +18,7 @@
     </div>
 
     <div class="toolbar-center">
-      <div class="url-form" id="urlForm">
+      <div class="url-form">
         <div class="url-input-wrap">
           <svg class="url-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M10 2C5.58 2 2 5.58 2 10s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm5.93 7H14c-.15-2.02-.78-3.88-1.8-5.45A6.06 6.06 0 0115.93 9zM10 16c-1.17 0-2.32-1.84-2.9-5H13c-.58 3.16-1.73 5-3 5zm-3-7c.58-3.16 1.73-5 3-5s2.42 1.84 3 5H7zm.8-6.45A11.8 11.8 0 006 9H4.07A6.06 6.06 0 017.8 3.55zM4.07 11H6c.15 2.02.78 3.88 1.8 5.45A6.06 6.06 0 014.07 11zm8.13 5.45C13.22 14.88 13.85 13.02 14 11h1.93a6.06 6.06 0 01-3.73 5.45z" fill="currentColor"/>
@@ -86,13 +86,10 @@
     </div>
   </div>
 
-  <!-- Viewport canvas -->
+  <!-- Viewport canvas — infinite 2D canvas, pan+zoom via CSS transform -->
   <main class="canvas" id="canvas">
-    <!-- #canvasScroll sizes itself to natW*zoom × natH*zoom so scrolling works
-         with a CSS-transformed inner. #canvasInner gets transform:scale(zoom). -->
-    <div id="canvasScroll">
-      <div class="canvas-inner" id="canvasInner"></div>
-    </div>
+    <div class="canvas-dot-grid" id="canvasDotGrid"></div>
+    <div class="canvas-inner" id="canvasInner"></div>
   </main>
 
   <!-- Custom device modal -->

@@ -1,7 +1,7 @@
 {
   "name": "@kubilaycakmak/viewports",
-  "version": "2.4.0",
-  "description": "Responsive preview tool — see your site at every screen size simultaneously",
+  "version": "3.0.0",
+  "description": "Responsive preview tool — see your site at every screen size simultaneously on a Figma-style infinite canvas",
   "type": "module",
   "bin": {
     "viewports": "bin/viewports.js"
@@ -19,7 +19,10 @@
     "developer-tools",
     "frontend",
     "preview",
-    "breakpoints"
+    "breakpoints",
+    "infinite-canvas",
+    "device-preview",
+    "localhost"
   ],
   "author": "Kubilay Cakmak (https://github.com/kubilaycakmak)",
   "license": "MIT",
