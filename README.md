@@ -207,6 +207,10 @@ Released under the [MIT License](./LICENSE.md).
 
 ## 📋 Changelog
 
+### v3.0.1
+- 🐛 Fixed proxy not syncing cached URL on fresh server start (no CLI URL arg)
+- 🐛 Fixed "No target URL set" error when reopening with a previously saved URL
+
 ### v3.0.0
 - 🗺 **Infinite 2D canvas** — complete rewrite from scroll-based to Figma-style `translate3d + scale` transform system
 - 🔍 **Cursor-anchored zoom** — zoom toward mouse position, 5%–200% range

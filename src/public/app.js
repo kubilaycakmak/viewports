@@ -882,25 +882,31 @@ async function init() {
     const res = await fetch('/api/config');
     const { targetUrl, fromCli, sessionId, proxyPort } = await res.json();
     if (proxyPort) _proxyPort = proxyPort;
-    if (targetUrl && (fromCli || !state.url)) {
+
+    if (targetUrl && fromCli) {
+      // CLI provided a URL — always use it and sync proxy
       state.url = targetUrl;
-      // Probe if CLI target is reachable
-      if (fromCli) {
-        fetch(`/api/probe?url=${encodeURIComponent(targetUrl)}`)
-          .then((r) => r.json())
-          .then(({ ok }) => {
-            if (!ok) showToast(`⚠ Cannot reach ${targetUrl} — is the dev server running?`, 'error');
-          })
-          .catch(() => {});
-      }
+    } else if (!fromCli && !targetUrl && state.url) {
+      // No CLI URL — server is fresh, sync cached localStorage URL to proxy
+      fetch(`/api/set-target?url=${encodeURIComponent(state.url)}`).catch(() => {});
     }
+
+    // Probe reachability when URL came from CLI
+    if (fromCli && targetUrl) {
+      fetch(`/api/probe?url=${encodeURIComponent(targetUrl)}`)
+        .then((r) => r.json())
+        .then(({ ok }) => {
+          if (!ok) showToast(`⚠ Cannot reach ${targetUrl} — is the dev server running?`, 'error');
+        })
+        .catch(() => {});
+    }
+
     // Different sessionId = server was restarted → reset layout + restore devices if empty
     if (sessionId && sessionId !== state.sessionId) {
       state.positions = {};
       state.zIndices  = {};
       state.maxZ      = 10;
       state.sessionId = sessionId;
-      // If all devices were removed in a previous session, restore defaults
       if (state.activeIds.length === 0) {
         state.activeIds = [...DEFAULT_ACTIVE];
       }
