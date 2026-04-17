@@ -58,16 +58,124 @@ async function findAvailablePort(start) {
   return null;
 }
 
+// ─── Page crawler helpers ─────────────────────────────────────────────────────
+
+function fetchUrlText(urlStr, timeoutMs = 8000) {
+  return new Promise((resolve, reject) => {
+    let t;
+    try { t = new URL(urlStr); } catch (e) { return reject(e); }
+    const requester = t.protocol === 'https:' ? httpsRequest : httpRequest;
+    const req = requester(
+      { hostname: t.hostname, port: +t.port || (t.protocol === 'https:' ? 443 : 80),
+        path: t.pathname + (t.search || ''), method: 'GET', timeout: timeoutMs,
+        headers: { 'user-agent': 'viewports-crawler/1.0', accept: '*/*' } },
+      (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', c => { body += c; });
+        res.on('end', () => resolve({ status: res.statusCode, body }));
+      }
+    );
+    req.on('timeout', () => req.destroy(new Error('Timeout')));
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+function parseSitemapXml(xml) {
+  const urls = [];
+  const re = /<loc[^>]*>\s*([^<]+)\s*<\/loc>/gi;
+  let m;
+  while ((m = re.exec(xml)) !== null) urls.push(m[1].trim().replace(/&amp;/g, '&'));
+  return urls;
+}
+
+function parseSitemapFromRobots(text) {
+  const sitemaps = [];
+  for (const line of text.split('\n')) {
+    const m = line.match(/^Sitemap:\s*(.+)/i);
+    if (m) sitemaps.push(m[1].trim());
+  }
+  return sitemaps;
+}
+
+function parseHtmlLinks(html, baseUrl) {
+  const links = new Set();
+  const origin = new URL(baseUrl).origin;
+  const skipExt = /\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map|pdf|zip|gz)$/i;
+  const re = /href=["']([^"'#?][^"']*?)["']/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const href = m[1].trim();
+    if (!href || /^(mailto:|javascript:|tel:)/.test(href)) continue;
+    try {
+      const resolved = new URL(href, baseUrl);
+      if (resolved.origin === origin && !skipExt.test(resolved.pathname))
+        links.add(resolved.origin + resolved.pathname);
+    } catch {}
+  }
+  return [...links];
+}
+
+function injectProxyRuntime(html, targetUrl, proxyPort) {
+  let target;
+  try { target = new URL(targetUrl); } catch { return html; }
+
+  const runtime = `<script>(function(){var TARGET_ORIGIN=${JSON.stringify(target.origin)};var PROXY_ORIGIN=${JSON.stringify(`http://localhost:${proxyPort}`)};var PROXY_PORT=${proxyPort};function rewrite(url){try{var next=new URL(String(url),window.location.href);if(next.origin===TARGET_ORIGIN){return PROXY_ORIGIN+next.pathname+next.search+next.hash;}if((next.hostname==='localhost'||next.hostname==='127.0.0.1')&&next.port&&next.port!==String(PROXY_PORT)){return PROXY_ORIGIN+'/_proxy_/'+next.port+next.pathname+next.search+next.hash;}}catch(e){}return url;}var originalFetch=window.fetch;if(typeof originalFetch==='function'){window.fetch=function(input,init){if(typeof input==='string'||input instanceof URL){return originalFetch.call(this,rewrite(input),init);}if(input&&input.url){return originalFetch.call(this,new Request(rewrite(input.url),input),init);}return originalFetch.call(this,input,init);};}var originalOpen=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(method,url){var args=Array.prototype.slice.call(arguments);args[1]=rewrite(url);return originalOpen.apply(this,args);};try{var _la=window.location.assign.bind(window.location);window.location.assign=function(u){_la(rewrite(u));}}catch(e){}try{var _lr=window.location.replace.bind(window.location);window.location.replace=function(u){_lr(rewrite(u));}}catch(e){}if(window.history){try{var _ps=window.history.pushState.bind(window.history);window.history.pushState=function(s,t,u){_ps(s,t,u?rewrite(u):u);};}catch(e){}try{var _rs=window.history.replaceState.bind(window.history);window.history.replaceState=function(s,t,u){_rs(s,t,u?rewrite(u):u);};}catch(e){}}})();</script>`;
+
+  if (html.includes('</head>')) return html.replace('</head>', `${runtime}</head>`);
+  if (html.includes('</body>')) return html.replace('</body>', `${runtime}</body>`);
+  return runtime + html;
+}
+
 /**
  * Transparent HTTP/WS proxy.
  * All requests are forwarded to the current target with:
  *   - X-Frame-Options removed
  *   - Access-Control-Allow-Origin: * added
  *   - CSP frame-ancestors removed
- * No content rewriting — assets/fonts/WS all just work.
+ *   - HTML pages patched so absolute target-origin fetch/XHR calls are rewritten
+ *     through the local proxy port
  */
-function createTransparentProxy(getTarget) {
+function createTransparentProxy(getTarget, proxyPort) {
   const proxy = createServer((req, res) => {
+    // ── Sub-proxy: /_proxy_/:port/* ────────────────────────────────────────────
+    // Routes requests from proxied pages to OTHER localhost services (e.g. a
+    // backend API on a different port). Avoids CORS errors inside iframes by
+    // keeping all traffic on the same proxy origin.
+    const subMatch = req.url.match(/^\/_proxy_\/(\d+)(\/.*)?$/);
+    if (subMatch) {
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204, {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': '*',
+          'Access-Control-Allow-Headers': '*',
+          'Access-Control-Max-Age': '86400',
+        });
+        return res.end();
+      }
+      const tPort = parseInt(subMatch[1], 10);
+      const tPath = subMatch[2] || '/';
+      const fwdH  = { ...req.headers, host: `localhost:${tPort}` };
+      delete fwdH['origin'];
+      delete fwdH['referer'];
+      const pr = httpRequest(
+        { hostname: 'localhost', port: tPort, path: tPath, method: req.method, headers: fwdH },
+        (pRes) => {
+          const h = { ...pRes.headers };
+          h['access-control-allow-origin']      = '*';
+          h['access-control-allow-credentials'] = 'true';
+          delete h['x-frame-options'];
+          res.writeHead(pRes.statusCode, h);
+          pRes.pipe(res);
+        }
+      );
+      pr.on('error', () => { if (!res.headersSent) { res.writeHead(502); res.end(); } });
+      req.pipe(pr);
+      return;
+    }
+
+    // ── Main proxy: forward to target URL ─────────────────────────────────────
     const rawTarget = getTarget();
     if (!rawTarget) {
       res.writeHead(503, { 'Content-Type': 'text/html' });
@@ -100,8 +208,36 @@ function createTransparentProxy(getTarget) {
           h['content-security-policy'] = h['content-security-policy']
             .replace(/frame-ancestors[^;]*(;|$)/gi, '');
         }
-        res.writeHead(proxyRes.statusCode, h);
-        proxyRes.pipe(res);
+        // Rewrite absolute Location headers so 3xx redirects stay within the proxy
+        // rather than bouncing the iframe back to the raw target origin.
+        if (h['location'] && proxyPort) {
+          try {
+            const locUrl = new URL(h['location']);
+            if (locUrl.origin === t.origin) {
+              h['location'] = `http://localhost:${proxyPort}${locUrl.pathname}${locUrl.search}${locUrl.hash}`;
+            }
+          } catch {}
+        }
+        const contentType= String(h['content-type'] || '');
+        const contentEncoding = String(h['content-encoding'] || '');
+        const shouldInject = proxyPort
+          && contentType.includes('text/html')
+          && (!contentEncoding || contentEncoding === 'identity');
+
+        if (!shouldInject) {
+          res.writeHead(proxyRes.statusCode, h);
+          proxyRes.pipe(res);
+          return;
+        }
+
+        let body = '';
+        proxyRes.setEncoding('utf8');
+        proxyRes.on('data', (chunk) => { body += chunk; });
+        proxyRes.on('end', () => {
+          delete h['content-length'];
+          res.writeHead(proxyRes.statusCode, h);
+          res.end(injectProxyRuntime(body, rawTarget, proxyPort));
+        });
       }
     );
     proxyReq.on('error', (e) => {
@@ -150,8 +286,8 @@ export async function startServer({ targetUrl, port, openBrowser: shouldOpen }) 
   // Start transparent proxy on port+1 (finds next available)
   let proxyPort = null;
   try {
-    proxyPort = await findAvailablePort(port + 1);
-    const tProxy = createTransparentProxy(() => currentTarget);
+        proxyPort = await findAvailablePort(port + 1);
+        const tProxy = createTransparentProxy(() => currentTarget, proxyPort);
     await new Promise((resolve, reject) =>
       tProxy.listen(proxyPort, (err) => err ? reject(err) : resolve())
     );
@@ -183,6 +319,82 @@ export async function startServer({ targetUrl, port, openBrowser: shouldOpen }) 
     if (req.url === '/api/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ ok: true }));
+    }
+
+    // API: crawl-pages — discover pages via sitemap.xml, robots.txt, or HTML links
+    if (req.url.startsWith('/api/crawl-pages')) {
+      const params = new URL(req.url, 'http://localhost').searchParams;
+      const target = params.get('url');
+      if (!target) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Missing url param' }));
+      }
+      let base;
+      try { base = new URL(target); } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Invalid URL' }));
+      }
+      (async () => {
+        let pages = [];
+        let source = 'crawl';
+
+        // 1. Collect sitemap URLs from robots.txt, then always try /sitemap.xml
+        const sitemapUrls = [`${base.origin}/sitemap.xml`];
+        try {
+          const { body } = await fetchUrlText(`${base.origin}/robots.txt`);
+          for (const s of parseSitemapFromRobots(body))
+            if (!sitemapUrls.includes(s)) sitemapUrls.push(s);
+        } catch {}
+
+        // 2. Try each sitemap
+        for (const sUrl of sitemapUrls) {
+          try {
+            const { status, body } = await fetchUrlText(sUrl);
+            if (status === 200 && body.includes('<loc')) {
+              const locs = parseSitemapXml(body).filter(u => {
+                try { return new URL(u).origin === base.origin; } catch { return false; }
+              });
+              if (locs.length > 0) {
+                pages = locs.map(u => ({ url: u, path: new URL(u).pathname || '/', source: 'sitemap' }));
+                source = 'sitemap';
+                break;
+              }
+            }
+          } catch {}
+        }
+
+        // 3. Fallback: parse <a href> links from root HTML
+        if (pages.length === 0) {
+          try {
+            const rootUrl = base.origin + (base.pathname || '/');
+            const { body } = await fetchUrlText(rootUrl);
+            const links = parseHtmlLinks(body, rootUrl);
+            const allUrls = new Set([base.origin + '/']);
+            for (const l of links) allUrls.add(l);
+            pages = [...allUrls].map(u => ({ url: u, path: new URL(u).pathname || '/', source: 'crawl' }));
+            source = 'crawl';
+          } catch (e) {
+            const message = e?.message || e?.code || 'Failed to fetch target';
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ error: message, pages: [] }));
+          }
+        }
+
+        // Deduplicate, sort, limit to 60
+        const seen = new Set();
+        pages = pages
+          .filter(p => { if (seen.has(p.url)) return false; seen.add(p.url); return true; })
+          .sort((a, b) => a.path.localeCompare(b.path))
+          .slice(0, 60);
+
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ pages, source, total: pages.length }));
+      })().catch(e => {
+        const message = e?.message || e?.code || 'Failed to fetch target';
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: message, pages: [] }));
+      });
+      return;
     }
 
     // API: probe — quick reachability check

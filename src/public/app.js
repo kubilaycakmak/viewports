@@ -1,5 +1,7 @@
 // ─── Device Definitions ────────────────────────────────────────────────────
 
+import { initPagesExplorer } from './pages-explorer.js';
+
 // Proxy port provided by the server (transparent port-forwarding proxy).
 // When set, iframes point to http://localhost:<proxyPort>/ instead of
 // the raw target URL, so X-Frame-Options / CORS / SPA routing all just work.
@@ -1078,6 +1080,21 @@ async function init() {
     document.querySelectorAll('.type-btn').forEach((b) => b.classList.remove('active'));
     btn.classList.add('active');
   });
+
+  // ── Tab switching: Viewport ↔ Pages ──────────────────────────────────────
+  document.getElementById('tabViewport').addEventListener('click', () => {
+    document.body.classList.remove('pages-mode');
+    document.getElementById('tabViewport').classList.add('active');
+    document.getElementById('tabPages').classList.remove('active');
+  });
+
+  document.getElementById('tabPages').addEventListener('click', () => {
+    document.body.classList.add('pages-mode');
+    document.getElementById('tabPages').classList.add('active');
+    document.getElementById('tabViewport').classList.remove('active');
+  });
+
+  initPagesExplorer(_proxyPort, DEVICE_GROUPS);
 }
 
 init();
