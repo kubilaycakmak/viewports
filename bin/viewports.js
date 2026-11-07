@@ -1,57 +1,93 @@
 #!/usr/bin/env node
 
-import { startServer } from '../src/server.js';
-import { readFile } from 'fs/promises';
-import { join } from 'path';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { parseArgs } from 'node:util';
+import { createPreviewRequest, DEVICE_IDS } from '../src/desktop/request.js';
 
-const args = process.argv.slice(2);
-
-if (args.includes('-h') || args.includes('--help')) {
-  console.log(`
-  Usage: viewports [url] [options]
-
-  Arguments:
-    url                    Target URL to preview (e.g. http://localhost:3000)
-                           Auto-detected from package.json if omitted.
-
-  Options:
-    -p, --port <number>    Port for the viewports server  (default: 5177)
-    --no-open              Skip auto-opening the browser
-    -V, --version          Print version number
-    -h, --help             Display help
-  `);
-  process.exit(0);
+try {
+  await run(process.argv.slice(2));
+} catch (error) {
+  console.error(`viewports: ${error.message}`);
+  process.exitCode = 1;
 }
 
-if (args.includes('-V') || args.includes('--version')) {
-  const { createRequire } = await import('module');
-  const require = createRequire(import.meta.url);
-  const pkg = require('../package.json');
-  console.log(pkg.version);
-  process.exit(0);
-}
+async function run(args) {
+  const command = ['web', 'mcp'].includes(args[0]) ? args.shift() : 'desktop';
+  const { values, positionals } = parseArgs({
+    args,
+    allowPositionals: true,
+    options: {
+      devices: { type: 'string' },
+      port: { type: 'string', short: 'p' },
+      'no-open': { type: 'boolean' },
+      version: { type: 'boolean', short: 'V' },
+      help: { type: 'boolean', short: 'h' },
+    },
+  });
 
-let url = '';
-let port = 5177;
-let openBrowser = true;
+  if (values.help) {
+    console.log(`Usage:
+  viewports [url] [--devices <ids>]     Open live previews in separate desktop windows
+  viewports mcp                        Start the local MCP server over stdio
+  viewports web [url] [--port <port>] [--no-open]
+                                       Open the original browser canvas
 
-for (let i = 0; i < args.length; i++) {
-  const arg = args[i];
-  if (arg === '-p' || arg === '--port') {
-    port = parseInt(args[++i], 10);
-  } else if (arg === '--no-open') {
-    openBrowser = false;
-  } else if (!arg.startsWith('-')) {
-    url = arg;
+Desktop defaults to iPhone 17, iPad Pro 11, and Desktop HD.
+Select up to three presets with comma-separated IDs.
+Preset IDs: ${DEVICE_IDS.join(', ')}
+  -h, --help      Display help
+  -V, --version   Print version number`);
+    return;
   }
+
+  if (values.version || command === 'mcp') {
+    const { version } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+    if (values.version) {
+      console.log(version);
+      return;
+    }
+    if (positionals.length || Object.keys(values).length) {
+      throw new Error('Usage: viewports mcp');
+    }
+    const { startMcp } = await import('../src/mcp.js');
+    await startMcp(version);
+    return;
+  }
+
+  if (positionals.length > 1) throw new Error('Pass one URL. See viewports --help.');
+  const [url] = positionals;
+  if (command === 'web' || values.port !== undefined || values['no-open']) {
+    if (values.devices !== undefined) throw new Error('--devices is only available in desktop mode.');
+    const port = Number(values.port ?? 5177);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      throw new Error('--port must be an integer from 1 to 65535.');
+    }
+    const { startServer } = await import('../src/server.js');
+    await startServer({ targetUrl: url || await detectProjectUrl(), port, openBrowser: !values['no-open'] });
+    return;
+  }
+
+  const target = url || await detectRunningProjectUrl();
+  const devices = values.devices?.split(',').map(id => id.trim());
+  const request = createPreviewRequest(target, devices);
+  const { launchDesktop } = await import('../src/desktop/launch.js');
+  await launchDesktop(request);
+  console.log(`Opened ${request.devices.map(({ name }) => name).join(', ')} for ${request.url}`);
 }
 
-// Auto-detect URL from project's package.json if not provided
-if (!url) {
-  url = await detectProjectUrl();
+async function detectRunningProjectUrl() {
+  const url = await detectProjectUrl();
+  if (url) {
+    try {
+      await fetch(url, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(1500) });
+      return url;
+    } catch {
+      throw new Error(`Could not reach ${url}. Start your dev server or pass its URL explicitly.`);
+    }
+  }
+  throw new Error('Could not detect a dev server URL. Run viewports http://localhost:3000.');
 }
-
-await startServer({ targetUrl: url, port, openBrowser });
 
 async function detectProjectUrl() {
   // Known framework default ports

@@ -2,93 +2,54 @@
 
 > See your site at every screen size — simultaneously.
 
-A zero-config developer tool that opens your localhost in **20+ device viewports** at once on a **Figma-style infinite canvas**. Pan, zoom, drag, screenshot. No install required.
+Open the same site in separate, live desktop windows at phone, tablet, and desktop sizes. Each window can move independently and keeps its preset viewport dimensions when scaled to fit the display.
 
-[![npm version](https://img.shields.io/npm/v/@kubilaycakmak/viewports?style=flat-square&color=7c6afe&label=npm)](https://www.npmjs.com/package/@kubilaycakmak/viewports)
-[![npm downloads](https://img.shields.io/npm/dm/@kubilaycakmak/viewports?style=flat-square&color=7c6afe)](https://www.npmjs.com/package/@kubilaycakmak/viewports)
-[![License: MIT](https://img.shields.io/badge/license-MIT-7c6afe?style=flat-square)](./LICENSE.md)
-[![Node ≥18](https://img.shields.io/badge/node-%3E%3D18-7c6afe?style=flat-square)](https://nodejs.org)
+This is the desktop prototype on the `dev` branch. Try it with Node.js 22.12 or newer and a running dev server.
 
 ```bash
-npx @kubilaycakmak/viewports http://localhost:3000
+npx --yes --package='git+https://github.com/kubilaycakmak/viewports.git#dev' viewports http://localhost:3000
 ```
 
-![viewports preview](https://raw.githubusercontent.com/kubilaycakmak/viewports/master/docs/screenshot.png)
-
----
-
-## ✨ Features
-
-- 🗺 &nbsp;**Infinite 2D canvas** — Figma-style free space: pan, zoom (5%–200%), drag every window anywhere
-- 📱 &nbsp;**20+ device presets** — 2026 lineup: iPhone 17 series, Galaxy S26, Pixel 10, iPad Pro, MacBook, Desktop 4K
-- 🔍 &nbsp;**Smooth zoom** — `Ctrl+Scroll` or step buttons · cursor-anchored zoom like Figma
-- 🖱 &nbsp;**Pan** — left-click drag on canvas background · middle mouse button
-- 🔄 &nbsp;**Rotate** — portrait ↔ landscape toggle per device
-- ➕ &nbsp;**Custom devices** — add any resolution with a name and category
-- 📐 &nbsp;**Fit All** — auto-arranges all windows and zooms to fit with one click
-- 💾 &nbsp;**Persistent state** — URL, layout, zoom, pan, device visibility saved between sessions
-- 🛡 &nbsp;**Transparent proxy** — strips `X-Frame-Options`, handles CORS, forwards WebSocket HMR (Next.js, Vite, etc.)
-- 📸 &nbsp;**Screenshot** — captures the canvas with rounded corners, no browser chrome
-- ⚡ &nbsp;**Zero dependencies** — pure vanilla JS/CSS + Node.js built-ins only, boots instantly
-
----
-
-## 🚀 Quick Start
+To run from a checkout:
 
 ```bash
-# No install needed — just run
-npx @kubilaycakmak/viewports http://localhost:3000
-
-# Custom port for the viewports UI
-npx @kubilaycakmak/viewports http://localhost:5173 --port 4444
+git clone --branch dev https://github.com/kubilaycakmak/viewports.git
+cd viewports
+npm ci
+npm start -- http://localhost:3000
 ```
 
-Your browser opens automatically with all device viewports loaded and ready.
+The first desktop launch downloads Electron. It opens an iPhone 17, iPad Pro 11, and Desktop HD side by side. Select one to three different presets with `--devices`.
 
----
-
-## 📦 Installation
-
-**Global install** (use anywhere):
 ```bash
-npm install -g @kubilaycakmak/viewports
-viewports http://localhost:3000
+npm start -- http://localhost:3000/checkout --devices iphone-17,desktop-hd
+node bin/viewports.js --help
 ```
 
-**Per-project** (recommended for teams):
-```bash
-npm install -D @kubilaycakmak/viewports
-```
+If you omit the URL, Viewports looks for a dev script in the current project and checks that the inferred URL responds. These presets target responsive breakpoints in Chromium.
 
-Add to your `package.json`:
+## MCP
+
+Configure your local MCP client to launch the server with the absolute path to the checkout's CLI entry point.
+
 ```json
 {
-  "scripts": {
-    "preview": "viewports http://localhost:3000"
+  "mcpServers": {
+    "viewports": {
+      "command": "node",
+      "args": ["/absolute/path/to/viewports/bin/viewports.js", "mcp"]
+    }
   }
 }
 ```
 
-Now the whole team can run `npm run preview` without any global install.
+Ask the agent to “Open checkout at http://localhost:3000/checkout on an iPhone and desktop.” The `open_preview` tool accepts a URL and optional preset IDs. It opens the same desktop windows as the CLI and returns the devices it opened. Run the MCP server on the computer with the graphical desktop you want to use.
 
----
+## Browser canvas
 
-## 🖥 CLI Options
+Run `npm start -- web http://localhost:3000` to open the original canvas in your browser. Use `--port` to set its server port or `--no-open` to start it without opening a browser.
 
-```
-Usage: viewports [url] [options]
-
-Arguments:
-  url                    Target URL to preview  (default: last used)
-
-Options:
-  -p, --port <number>    Port for the viewports server  (default: 5177)
-  --no-open              Skip auto-opening the browser
-  -V, --version          Print version number
-  -h, --help             Display help
-```
-
----
+![Browser canvas preview](https://raw.githubusercontent.com/kubilaycakmak/viewports/master/docs/screenshot.png)
 
 ## 🗺 Canvas Controls
 
@@ -156,7 +117,7 @@ Click the 📷 camera button in the toolbar. Select the viewports tab when the b
 
 ## 🛡 Transparent Proxy
 
-`viewports` automatically starts a transparent proxy on `port+1`. Every iframe loads through this proxy, which:
+In browser canvas mode, `viewports` starts a transparent proxy on `port+1`. Every iframe loads through this proxy, which:
 
 - Strips `X-Frame-Options` and `Content-Security-Policy` headers
 - Adds CORS headers so assets load correctly
@@ -168,8 +129,8 @@ Your app's HMR keeps working inside every viewport as you code.
 
 ## 🛠 Requirements
 
-- **Node.js** ≥ 18.0.0
-- Any modern browser (Chrome, Firefox, Edge, Safari)
+- **Node.js** ≥ 22.12.0
+- A graphical desktop for Electron or a modern browser for the canvas mode
 
 ---
 

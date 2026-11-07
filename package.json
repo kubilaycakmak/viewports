@@ -1,7 +1,7 @@
 {
   "name": "@kubilaycakmak/viewports",
   "version": "3.0.1",
-  "description": "Responsive preview tool — see your site at every screen size simultaneously on a Figma-style infinite canvas",
+  "description": "Live responsive previews in desktop windows, with a CLI and MCP server",
   "type": "module",
   "bin": {
     "viewports": "bin/viewports.js"
@@ -11,7 +11,11 @@
     "start": "node bin/viewports.js",
     "dev": "node bin/viewports.js http://localhost:3000"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "electron": "^45.2.3",
+    "zod": "^4.6.7"
+  },
   "keywords": [
     "responsive",
     "viewport",
@@ -35,6 +39,6 @@
     "url": "https://github.com/kubilaycakmak/viewports/issues"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.12.0"
   }
 }

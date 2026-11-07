@@ -1,0 +1,32 @@
+import { ALL_DEVICES } from '../public/devices.js';
+
+const DEFAULT_DEVICES = ['iphone-17', 'ipad-pro-11', 'desktop-hd'];
+export const DEVICE_IDS = ALL_DEVICES.map(({ id }) => id);
+export const MAX_DEVICES = 3;
+export const STARTUP_MESSAGE = 'viewports:';
+
+export function createPreviewRequest(url, deviceIds = DEFAULT_DEVICES) {
+  let target;
+  try {
+    target = new URL(url);
+  } catch {
+    throw new Error('Pass a complete URL such as http://localhost:3000.');
+  }
+
+  if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password) {
+    throw new Error('Use an HTTP or HTTPS URL without embedded credentials.');
+  }
+  if (deviceIds.length < 1 || deviceIds.length > MAX_DEVICES) {
+    throw new Error(`Choose between 1 and ${MAX_DEVICES} devices.`);
+  }
+  if (new Set(deviceIds).size !== deviceIds.length) {
+    throw new Error('Choose each device only once.');
+  }
+
+  const devices = deviceIds.map(id => {
+    const device = ALL_DEVICES.find(device => device.id === id);
+    if (!device) throw new Error(`Unknown device "${id}". Run viewports --help to list presets.`);
+    return device;
+  });
+  return { url: target.href, devices };
+}
