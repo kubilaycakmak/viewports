@@ -7,35 +7,79 @@ import { STARTUP_MESSAGE } from './request.js';
 const electronCli = createRequire(import.meta.url).resolve('electron/cli.js');
 const desktopEntry = fileURLToPath(new URL('./main.js', import.meta.url));
 
-export function launchDesktop({ url, devices }) {
+export function launchDesktop({ url, devices }, { managed = false } = {}) {
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
+  if (managed) env.VIEWPORTS_CONTROL = 'stdio';
+  else delete env.VIEWPORTS_CONTROL;
 
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [electronCli, desktopEntry, url, ...devices.map(({ id }) => id)], {
       detached: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: [managed ? 'pipe' : 'ignore', 'pipe', 'pipe'],
       env,
     });
     child.stderr.on('data', chunk => process.stderr.write(chunk));
+    child.stdin?.on('error', () => disconnect());
     const output = createInterface({ input: child.stdout });
+    const pending = new Map();
+    let nextId = 0;
+    let settled = false;
+    let disconnected = false;
     const timeout = setTimeout(() => {
       finish(new Error('Desktop windows did not load within two minutes.'));
     }, 120_000);
-    let settled = false;
+
+    function disconnect() {
+      if (disconnected) return;
+      disconnected = true;
+      child.stdin?.end();
+      output.close();
+      child.stdout.destroy();
+      child.stderr.destroy();
+      child.unref();
+      for (const request of pending.values()) request.reject(new Error('Preview session closed.'));
+      pending.clear();
+    }
 
     function finish(error) {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
-      output.close();
-      child.stdout.destroy();
-      child.stderr.destroy();
       if (error) {
+        disconnect();
         child.kill();
         reject(error);
+      } else if (managed) {
+        resolve({
+          url,
+          devices,
+          control: {
+            disconnect,
+            request(action, device) {
+              if (disconnected) return Promise.reject(new Error('Preview session closed.'));
+              const id = ++nextId;
+              return new Promise((resolveRequest, rejectRequest) => {
+                const timer = setTimeout(() => {
+                  pending.delete(id);
+                  rejectRequest(new Error('Preview session did not respond.'));
+                }, 15_000);
+                pending.set(id, {
+                  resolve: value => { clearTimeout(timer); resolveRequest(value); },
+                  reject: error => { clearTimeout(timer); rejectRequest(error); },
+                });
+                child.stdin.write(JSON.stringify({ id, action, device }) + '\n', error => {
+                  if (error) {
+                    pending.get(id)?.reject(error);
+                    pending.delete(id);
+                  }
+                });
+              });
+            },
+          },
+        });
       } else {
-        child.unref();
+        disconnect();
         resolve({ url, devices });
       }
     }
@@ -47,12 +91,26 @@ export function launchDesktop({ url, devices }) {
       }
       try {
         const result = JSON.parse(line.slice(STARTUP_MESSAGE.length));
-        finish(result.ready === true ? undefined : new Error(result.error));
+        if (!settled) {
+          finish(result.ready === true ? undefined : new Error(result.error));
+          return;
+        }
+        const request = pending.get(result.id);
+        if (!request) return;
+        pending.delete(result.id);
+        if (result.error) request.reject(new Error(result.error));
+        else request.resolve(result);
       } catch (error) {
         finish(error);
       }
     });
-    child.once('error', finish);
-    child.once('close', code => finish(new Error(`Desktop app stopped before opening its windows (exit ${code}).`)));
+    child.once('error', error => {
+      if (!settled) finish(error);
+      else disconnect();
+    });
+    child.once('close', code => {
+      if (!settled) finish(new Error(`Desktop app stopped before opening its windows (exit ${code}).`));
+      else disconnect();
+    });
   });
 }

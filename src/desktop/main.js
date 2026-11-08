@@ -1,13 +1,15 @@
 import { app, BrowserWindow, dialog, Menu, screen } from 'electron';
-import { DEVICE_GROUPS } from '../public/devices.js';
+import { createInterface } from 'node:readline';
+import { ALL_DEVICES, DEVICE_GROUPS } from '../public/devices.js';
 import { createPreviewRequest, STARTUP_MESSAGE } from './request.js';
 
 const PADDING = 20;
 const GAP = 12;
 const TITLE_BAR_SPACE = 48;
 const windows = new Map();
-const opening = new Set();
+const opening = new Map();
 let targetUrl;
+let controlled = process.env.VIEWPORTS_CONTROL === 'stdio';
 
 function updateMenu() {
   const menu = [];
@@ -34,16 +36,22 @@ function updateMenu() {
 }
 
 async function toggleDevice(device) {
-  const current = windows.get(device.id);
-  if (current) {
-    current.close();
-    return;
-  }
-  if (opening.has(device.id)) return;
-
-  opening.add(device.id);
-  updateMenu();
   try {
+    if (windows.has(device.id)) {
+      await removeDevice(device);
+    } else {
+      await addDevice(device);
+    }
+  } catch (error) {
+    dialog.showErrorBox('Could not update device', error.message);
+  }
+}
+
+function addDevice(device) {
+  if (opening.has(device.id)) return opening.get(device.id);
+  if (windows.has(device.id)) return Promise.resolve();
+
+  const operation = Promise.resolve().then(async () => {
     const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
     const scale = Math.min(1, (workArea.width - 2 * PADDING) / device.width,
       (workArea.height - 2 * PADDING - TITLE_BAR_SPACE) / device.height);
@@ -58,12 +66,58 @@ async function toggleDevice(device) {
     };
     const window = await openWindow(device, targetUrl, bounds, scale);
     window.show();
-  } catch (error) {
-    dialog.showErrorBox('Could not open device', error.message);
-  } finally {
+  }).finally(() => {
     opening.delete(device.id);
     updateMenu();
-  }
+  });
+  opening.set(device.id, operation);
+  updateMenu();
+  return operation;
+}
+
+async function removeDevice(device) {
+  if (opening.has(device.id)) await opening.get(device.id);
+  const window = windows.get(device.id);
+  if (!window) return;
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      window.removeListener('closed', onClosed);
+      reject(new Error(`${device.name} could not be closed.`));
+    }, 5000);
+    function onClosed() {
+      clearTimeout(timeout);
+      resolve();
+    }
+    window.once('closed', onClosed);
+    window.close();
+  });
+}
+
+function startControl() {
+  const input = createInterface({ input: process.stdin });
+  let queue = Promise.resolve();
+  input.on('line', line => {
+    queue = queue.then(async () => {
+      let message;
+      try {
+        message = JSON.parse(line);
+        if (message.action !== 'status') {
+          const device = ALL_DEVICES.find(item => item.id === message.device);
+          if (!device || !['add', 'remove'].includes(message.action)) {
+            throw new Error('Unknown device or action.');
+          }
+          await (message.action === 'add' ? addDevice(device) : removeDevice(device));
+        }
+        report({ id: message.id, devices: [...windows.keys()] });
+      } catch (error) {
+        report({ id: message?.id, error: error.message });
+      }
+    });
+  });
+  input.on('close', () => {
+    controlled = false;
+    if (windows.size === 0) app.quit();
+  });
 }
 
 function updateScale(window, device) {
@@ -183,7 +237,9 @@ function report(result, callback) {
 }
 
 app.name = 'Viewports';
-app.on('window-all-closed', () => app.quit());
+app.on('window-all-closed', () => {
+  if (!controlled) app.quit();
+});
 
 app.whenReady().then(async () => {
   const [url, ...deviceIds] = process.argv.slice(2);
@@ -197,6 +253,7 @@ app.whenReady().then(async () => {
 
   updateMenu();
   for (const window of opened) window.show();
+  if (controlled) startControl();
   report({ ready: true });
 }).catch(error => {
   report({ error: error.message }, () => app.exit(1));

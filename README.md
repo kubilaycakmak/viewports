@@ -22,28 +22,32 @@ npm start -- http://localhost:3000
 The first desktop launch downloads Electron. It opens an iPhone 17, iPad Pro 11, and Desktop HD, arranged to fit the display. Select presets with `--devices`. Resize a window by dragging its edge. Each device retains its viewport dimensions and aspect ratio. Use the **Devices** menu to add or remove devices while the session is open.
 
 ```bash
-npm start -- http://localhost:3000/checkout --devices iphone-17,desktop-hd
-node bin/viewports.js --help
+npx --yes --package='git+https://github.com/kubilaycakmak/viewports.git#dev' viewports http://localhost:3000/checkout --devices iphone-17,desktop-hd
+npx --yes --package='git+https://github.com/kubilaycakmak/viewports.git#dev' viewports --help
 ```
+
+Each CLI launch opens a new preview session. Manage its open devices with the Devices menu.
 
 If you omit the URL, Viewports looks for a dev script in the current project and checks that the inferred URL responds. These presets target responsive breakpoints in Chromium.
 
 ## MCP
 
-Configure your local MCP client to launch the server with the absolute path to the checkout's CLI entry point.
+Configure your local MCP client to launch the development branch through npx:
 
 ```json
 {
   "mcpServers": {
     "viewports": {
-      "command": "node",
-      "args": ["/absolute/path/to/viewports/bin/viewports.js", "mcp"]
+      "command": "npx",
+      "args": ["--yes", "--package=git+https://github.com/kubilaycakmak/viewports.git#dev", "viewports", "mcp"]
     }
   }
 }
 ```
 
-Ask the agent to “Open checkout at http://localhost:3000/checkout on an iPhone and desktop.” The `open_preview` tool accepts a URL and optional preset IDs. It opens the same desktop windows as the CLI and returns the devices it opened. Run the MCP server on the computer with the graphical desktop you want to use.
+Ask the agent to “Open checkout at http://localhost:3000/checkout on an iPhone and desktop.” The `open_preview` tool opens the desktop windows and returns a session ID. The agent can use `add_device`, `remove_device`, and `list_devices` with that ID to manage the open session. Device selections made through the desktop menu are reflected in `list_devices`.
+
+Run the MCP server on the computer with the graphical desktop you want to use. Session IDs belong to the active MCP connection. When the connection closes, open windows stay on the desktop and can be managed through the Devices menu. A new MCP connection can open a new preview session.
 
 ## Browser canvas
 
