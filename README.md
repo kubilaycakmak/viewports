@@ -19,7 +19,9 @@ npm ci
 npm start -- http://localhost:3000
 ```
 
-The first desktop launch downloads Electron. It opens an iPhone 17, iPad Pro 11, and Desktop HD, arranged to fit the display. Select presets with `--devices`. Resize a window by dragging its edge. Each device retains its viewport dimensions and aspect ratio. Use the **Devices** menu to add or remove devices while the session is open.
+The first desktop launch downloads Electron. If the official download has a temporary network error, Viewports retries and then uses the mirror documented by Electron. The Electron installer verifies the archive against the checksums bundled with the npm package. Custom Electron mirror settings are respected.
+
+It opens an iPhone 17, iPad Pro 11, and Desktop HD, arranged to fit the display. Select presets with `--devices`. Resize a window by dragging its edge. Each device retains its viewport dimensions and aspect ratio. Use the **Devices** menu to add or remove devices while the session is open.
 
 ```bash
 npx --yes --package='git+https://github.com/kubilaycakmak/viewports.git#dev' viewports http://localhost:3000/checkout --devices iphone-17,desktop-hd

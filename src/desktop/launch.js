@@ -2,12 +2,15 @@ import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
+import { ensureElectron } from './install-electron.js';
 import { STARTUP_MESSAGE } from './request.js';
 
 const electronCli = createRequire(import.meta.url).resolve('electron/cli.js');
 const desktopEntry = fileURLToPath(new URL('./main.js', import.meta.url));
 
-export function launchDesktop({ url, devices }, { managed = false } = {}) {
+export async function launchDesktop({ url, devices }, { managed = false } = {}) {
+  await ensureElectron();
+
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
   if (managed) env.VIEWPORTS_CONTROL = 'stdio';
