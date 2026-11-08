@@ -9,7 +9,8 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node bin/viewports.js",
-    "dev": "node bin/viewports.js http://localhost:3000"
+    "dev": "node bin/viewports.js http://localhost:3000",
+    "test:desktop": "electron test/desktop-resize.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",

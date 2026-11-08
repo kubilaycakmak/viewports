@@ -85,6 +85,7 @@ function updateScale(window, device) {
             height: device.height,
             deviceScaleFactor: 0,
             mobile: false,
+            dontSetVisibleSize: true,
             scale,
           });
         }
@@ -125,11 +126,13 @@ async function openWindow(device, url, bounds, scale) {
     await window.loadURL('about:blank');
     const debuggerSession = window.webContents.debugger;
     debuggerSession.attach();
+    // Keep the rendered surface sized to the window while emulating the device viewport.
     await debuggerSession.sendCommand('Emulation.setDeviceMetricsOverride', {
       width: device.width,
       height: device.height,
       deviceScaleFactor: 0,
       mobile: false,
+      dontSetVisibleSize: true,
       scale,
     });
 
