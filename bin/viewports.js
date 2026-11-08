@@ -34,7 +34,7 @@ async function run(args) {
                                        Open the original browser canvas
 
 Desktop defaults to iPhone 17, iPad Pro 11, and Desktop HD.
-Select up to three presets with comma-separated IDs.
+Select presets with comma-separated IDs.
 Preset IDs: ${DEVICE_IDS.join(', ')}
   -h, --help      Display help
   -V, --version   Print version number`);

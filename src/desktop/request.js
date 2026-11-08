@@ -2,7 +2,6 @@ import { ALL_DEVICES } from '../public/devices.js';
 
 const DEFAULT_DEVICES = ['iphone-17', 'ipad-pro-11', 'desktop-hd'];
 export const DEVICE_IDS = ALL_DEVICES.map(({ id }) => id);
-export const MAX_DEVICES = 3;
 export const STARTUP_MESSAGE = 'viewports:';
 
 export function createPreviewRequest(url, deviceIds = DEFAULT_DEVICES) {
@@ -16,8 +15,8 @@ export function createPreviewRequest(url, deviceIds = DEFAULT_DEVICES) {
   if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password) {
     throw new Error('Use an HTTP or HTTPS URL without embedded credentials.');
   }
-  if (deviceIds.length < 1 || deviceIds.length > MAX_DEVICES) {
-    throw new Error(`Choose between 1 and ${MAX_DEVICES} devices.`);
+  if (deviceIds.length < 1) {
+    throw new Error('Choose at least one device.');
   }
   if (new Set(deviceIds).size !== deviceIds.length) {
     throw new Error('Choose each device only once.');

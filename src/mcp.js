@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { createPreviewRequest, DEVICE_IDS, MAX_DEVICES } from './desktop/request.js';
+import { createPreviewRequest, DEVICE_IDS } from './desktop/request.js';
 
 export async function startMcp(version) {
   const server = new McpServer({ name: 'viewports', version });
@@ -11,7 +11,7 @@ export async function startMcp(version) {
     description: 'Open live responsive previews of a web URL in separate windows on the computer running this MCP server.',
     inputSchema: {
       url: z.string().describe('Complete HTTP(S) URL, including a localhost port when applicable.'),
-      devices: z.array(z.enum(DEVICE_IDS)).min(1).max(MAX_DEVICES).optional()
+      devices: z.array(z.enum(DEVICE_IDS)).min(1).optional()
         .describe('Device preset IDs. Defaults to iPhone 17, iPad Pro 11, and Desktop HD.'),
     },
   }, async ({ url, devices }) => {

@@ -19,7 +19,7 @@ npm ci
 npm start -- http://localhost:3000
 ```
 
-The first desktop launch downloads Electron. It opens an iPhone 17, iPad Pro 11, and Desktop HD side by side. Select one to three different presets with `--devices`.
+The first desktop launch downloads Electron. It opens an iPhone 17, iPad Pro 11, and Desktop HD, arranged to fit the display. Select presets with `--devices`. Resize a window by dragging its edge. Each device retains its viewport dimensions and aspect ratio. Use the **Devices** menu to add or remove devices while the session is open.
 
 ```bash
 npm start -- http://localhost:3000/checkout --devices iphone-17,desktop-hd
