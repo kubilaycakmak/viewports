@@ -6,6 +6,16 @@ export const TEXT_SIZES = {
 
 export const DEFAULT_AREAS = { top: true, bottom: true };
 
+// Visual approximations in CSS pixels, not manufacturer measurements.
+const DEVICE_CORNER_RADII = {
+  'iphone-17': 55, 'iphone-17-air': 54, 'iphone-17-pro': 55, 'iphone-17-pro-max': 60,
+  'iphone-14': 48, 'iphone-se': 30,
+  'galaxy-s26': 44, 'galaxy-s26-plus': 48, 'galaxy-s26-ultra': 24,
+  'pixel-10': 48, 'pixel-10-pro': 50,
+  'ipad-mini': 25, 'ipad-air-11': 27, 'ipad-pro-11': 28, 'ipad-pro-13': 32,
+  'galaxy-tab-s10': 24,
+};
+
 export function presentationFor(device, areas = DEFAULT_AREAS) {
   if (device.type !== 'mobile' && device.type !== 'tablet') {
     const top = areas.top ? 48 : 0;
@@ -19,6 +29,8 @@ export function presentationFor(device, areas = DEFAULT_AREAS) {
       bezel: 0,
       kind: 'desktop',
       pixelRatio: 0,
+      outerRadius: 0,
+      screenRadius: 0,
     };
   }
 
@@ -29,6 +41,8 @@ export function presentationFor(device, areas = DEFAULT_AREAS) {
   let bottom = 24;
   let kind = 'android';
   let pixelRatio = 0;
+  const outerRadius = DEVICE_CORNER_RADII[device.id] ?? (tablet ? 26 : 46);
+  const screenRadius = device.id === 'iphone-se' ? 2 : outerRadius - bezel;
 
   if (tablet) {
     top = 76;
@@ -55,6 +69,8 @@ export function presentationFor(device, areas = DEFAULT_AREAS) {
     bezel,
     kind,
     pixelRatio,
+    outerRadius,
+    screenRadius,
   };
 }
 

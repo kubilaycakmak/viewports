@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, screen, WebContentsView } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, screen, View, WebContentsView } from 'electron';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { ALL_DEVICES, DEVICE_GROUPS } from '../public/devices.js';
@@ -259,18 +259,23 @@ function startControl() {
 }
 
 async function applyMetrics(window, device) {
-  const { contents, view, frame } = previews.get(window);
+  const { contents, view, screenView, frame } = previews.get(window);
   const [width, height] = window.getContentSize();
   const scale = Math.min(width / frame.width, height / frame.height);
   if (scale <= 0) return;
 
   if (view) {
     const x = Math.round(frame.bezel * scale);
-    const y = Math.round((frame.bezel + frame.top) * scale);
+    const y = Math.round(frame.bezel * scale);
+    const screenWidth = Math.max(1, Math.round(frame.viewportWidth * scale));
+    const screenHeight = Math.max(1, Math.round(device.height * scale));
+    const top = Math.round(frame.top * scale);
+    screenView.setBounds({ x, y, width: screenWidth, height: screenHeight });
+    screenView.setBorderRadius(Math.round(frame.screenRadius * scale));
     view.setBounds({
-      x,
-      y,
-      width: Math.max(1, Math.round(frame.viewportWidth * scale)),
+      x: 0,
+      y: top,
+      width: screenWidth,
       height: Math.max(1, Math.round(frame.viewportHeight * scale)),
     });
     await window.webContents.executeJavaScript(
@@ -329,7 +334,8 @@ async function openWindow(device, url, bounds) {
     useContentSize: true,
     resizable: true,
     show: false,
-    backgroundColor: '#09090b',
+    transparent: frame.bezel > 0 && process.platform !== 'win32',
+    backgroundColor: frame.bezel > 0 && process.platform !== 'win32' ? '#00000000' : '#09090b',
     webPreferences: {
       sandbox: true,
       contextIsolation: true,
@@ -347,10 +353,13 @@ async function openWindow(device, url, bounds) {
       partition: 'viewports-preview',
     },
   });
+  const screenView = new View();
+  screenView.setBackgroundColor('#00000000');
+  screenView.addChildView(view);
   const contents = view.webContents;
   const userAgent = mobileUserAgent(device, process.versions.chrome);
   if (userAgent) contents.setUserAgent(userAgent);
-  previews.set(window, { contents, view, frame });
+  previews.set(window, { contents, view, screenView, frame });
   windows.set(device.id, window);
 
   window.on('closed', () => {
@@ -379,8 +388,10 @@ async function openWindow(device, url, bounds) {
         top: String(frame.top),
         bottom: String(frame.bottom),
         url,
+        outerRadius: String(frame.outerRadius),
+        screenRadius: String(frame.screenRadius),
       } });
-      window.contentView.addChildView(view);
+      window.contentView.addChildView(screenView);
     }
     await contents.loadURL('about:blank');
     contents.debugger.attach();

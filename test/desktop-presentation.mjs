@@ -4,6 +4,10 @@ import { app, BrowserWindow, Menu } from 'electron';
 import { ALL_DEVICES } from '../src/public/devices.js';
 import { presentationFor } from '../src/desktop/presentation.js';
 
+function previewViews(view) {
+  return view.children.flatMap(child => child.webContents ? [child] : previewViews(child));
+}
+
 async function waitFor(check) {
   for (let attempt = 0; attempt < 100; attempt++) {
     const result = await check();
@@ -42,7 +46,7 @@ async function run() {
       if (windows.length !== ids.length) return false;
       const previews = windows.map(window => {
         const contents = window.webContents.getURL() === url ? window.webContents
-          : window.contentView.children.find(view => view.webContents?.getURL() === url)?.webContents;
+          : previewViews(window.contentView).find(view => view.webContents?.getURL() === url)?.webContents;
         return { window, contents };
       });
       return previews.every(item => item.contents && !item.contents.isLoading()) && previews;
@@ -52,6 +56,14 @@ async function run() {
       const device = ALL_DEVICES.find(item => item.name === window.getTitle());
       assert.ok(device, window.getTitle());
       const frame = presentationFor(device);
+      const shell = await window.webContents.executeJavaScript(`({
+        outerRadius: getComputedStyle(document.getElementById('device')).borderTopLeftRadius,
+        screenRadius: getComputedStyle(document.querySelector('.screen')).borderTopLeftRadius,
+      })`);
+      assert.equal(shell.outerRadius, `${frame.outerRadius}px`);
+      assert.equal(shell.screenRadius, `${frame.screenRadius}px`);
+      const screenView = window.contentView.children.find(item => item.children.some(child => child.webContents === contents));
+      assert.ok(screenView, 'Preview should be clipped by its device screen');
       const state = await contents.executeJavaScript(`({
         innerWidth, innerHeight, screenWidth: screen.width, screenHeight: screen.height,
         ratio: devicePixelRatio, userAgent: navigator.userAgent, touches: navigator.maxTouchPoints,
@@ -71,6 +83,10 @@ async function run() {
 
     const phone = all.find(item => item.window.getTitle() === 'iPhone 17');
     const desktop = all.find(item => item.window.getTitle() === 'Desktop HD');
+    if (process.platform === 'darwin') {
+      const capture = await phone.window.capturePage();
+      assert.equal(capture.toBitmap()[3], 0, 'The outer device corner should be transparent');
+    }
     assert.deepEqual(await desktop.window.webContents.executeJavaScript(`[
       getComputedStyle(document.querySelector('.top-address')).display,
       getComputedStyle(document.querySelector('.bar')).display,
@@ -112,7 +128,7 @@ async function run() {
       const rect = document.getElementById('click').getBoundingClientRect();
       return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
     })()`);
-    const view = phone.window.contentView.children.find(item => item.webContents === phone.contents);
+    const view = previewViews(phone.window.contentView).find(item => item.webContents === phone.contents);
     const scale = view.getBounds().width / 402;
     const x = Math.round(position.x * scale);
     const y = Math.round(position.y * scale);
@@ -148,7 +164,7 @@ async function run() {
     devicesMenu.submenu.items.flatMap(group => group.submenu.items)
       .find(item => item.label.startsWith('iPhone SE ')).click();
     await waitFor(() => BrowserWindow.getAllWindows().some(window => window.getTitle() === 'iPhone SE'
-      && window.contentView.children.some(view => view.webContents?.getURL() === redirectedUrl || view.webContents?.getURL() === url + 'redirect')));
+      && previewViews(window.contentView).some(view => view.webContents?.getURL() === redirectedUrl || view.webContents?.getURL() === url + 'redirect')));
     console.log('Desktop presentation test passed.');
   } finally {
     server.closeAllConnections();

@@ -6,6 +6,10 @@ import { presentationFor } from '../src/desktop/presentation.js';
 const device = { id: 'iphone-se', type: 'mobile', width: 375, height: 667 };
 const frame = presentationFor(device);
 
+function previewViews(view) {
+  return view.children.flatMap(child => child.webContents ? [child] : previewViews(child));
+}
+
 async function waitFor(check) {
   for (let attempt = 0; attempt < 100; attempt++) {
     const result = await check();
@@ -33,8 +37,8 @@ async function run() {
 
   try {
     const window = await waitFor(() => BrowserWindow.getAllWindows().find(item =>
-      item.contentView.children.some(view => view.webContents?.getURL() === url && !view.webContents.isLoading())));
-    const view = window.contentView.children.find(item => item.webContents?.getURL() === url);
+      previewViews(item.contentView).some(view => view.webContents?.getURL() === url && !view.webContents.isLoading())));
+    const view = previewViews(window.contentView).find(item => item.webContents?.getURL() === url);
     const contents = view.webContents;
     const readFontSizes = () => contents.executeJavaScript(
       `['relative', 'fixed'].map(id => getComputedStyle(document.getElementById(id)).fontSize)`,
