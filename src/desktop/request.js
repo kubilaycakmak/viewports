@@ -1,10 +1,11 @@
 import { ALL_DEVICES } from '../public/devices.js';
+import { TEXT_SIZES } from './presentation.js';
 
-const DEFAULT_DEVICES = ['iphone-17', 'ipad-pro-11', 'desktop-hd'];
+export const DEFAULT_DEVICES = ['iphone-17', 'ipad-pro-11', 'desktop-hd'];
 export const DEVICE_IDS = ALL_DEVICES.map(({ id }) => id);
 export const STARTUP_MESSAGE = 'viewports:';
 
-export function createPreviewRequest(url, deviceIds = DEFAULT_DEVICES) {
+export function createPreviewRequest(url, deviceIds = DEFAULT_DEVICES, textSize = 'default') {
   let target;
   try {
     target = new URL(url);
@@ -14,6 +15,9 @@ export function createPreviewRequest(url, deviceIds = DEFAULT_DEVICES) {
 
   if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password) {
     throw new Error('Use an HTTP or HTTPS URL without embedded credentials.');
+  }
+  if (!Object.hasOwn(TEXT_SIZES, textSize)) {
+    throw new Error('Text size must be default, large, or extra-large.');
   }
   if (deviceIds.length < 1) {
     throw new Error('Choose at least one device.');
@@ -27,5 +31,5 @@ export function createPreviewRequest(url, deviceIds = DEFAULT_DEVICES) {
     if (!device) throw new Error(`Unknown device "${id}". Run viewports --help to list presets.`);
     return device;
   });
-  return { url: target.href, devices };
+  return { url: target.href, devices, textSize };
 }

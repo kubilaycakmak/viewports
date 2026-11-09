@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { app, BrowserWindow, screen } from 'electron';
+import { app, BrowserWindow, Menu, screen } from 'electron';
+import { presentationFor } from '../src/desktop/presentation.js';
 
-const device = { width: 375, height: 667 };
+const device = { id: 'iphone-se', type: 'mobile', width: 375, height: 667 };
+const frame = presentationFor(device);
 
 async function waitFor(check) {
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -18,7 +20,7 @@ async function run() {
     response.writeHead(200, { 'Content-Type': 'text/html' });
     response.end(`<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1">
       <style>html, body { margin: 0; height: 100%; background: rgb(11, 16, 32); }</style>
-      <h1 style="color: white">Resize test</h1>`);
+      <h1 style="color: white">Resize test</h1><p id="relative" style="font-size:1rem">Relative</p><p id="fixed" style="font-size:16px">Fixed</p>`);
   });
   await new Promise((resolve, reject) => {
     server.once('error', reject);
@@ -26,33 +28,42 @@ async function run() {
   });
 
   const url = `http://127.0.0.1:${server.address().port}/`;
-  process.argv = [process.argv[0], process.argv[1], url, 'iphone-se'];
+  process.argv = [process.argv[0], process.argv[1], url, 'iphone-se', '--text-size=large'];
   await import('../src/desktop/main.js');
 
   try {
-    const window = await waitFor(() => {
-      const preview = BrowserWindow.getAllWindows().find(item => item.webContents.getURL() === url);
-      return preview && !preview.webContents.isLoading() && preview;
-    });
+    const window = await waitFor(() => BrowserWindow.getAllWindows().find(item =>
+      item.contentView.children.some(view => view.webContents?.getURL() === url && !view.webContents.isLoading())));
+    const view = window.contentView.children.find(item => item.webContents?.getURL() === url);
+    const contents = view.webContents;
+    const readFontSizes = () => contents.executeJavaScript(
+      `['relative', 'fixed'].map(id => getComputedStyle(document.getElementById(id)).fontSize)`,
+    );
+    assert.deepEqual(await readFontSizes(), ['20px', '16px']);
 
-    for (const width of [250, 375, 550, 300]) {
-      const height = Math.round(width * device.height / device.width);
+    const textMenu = Menu.getApplicationMenu().items.find(item => item.label === 'Text Size');
+    textMenu.submenu.items.find(item => item.label.startsWith('Extra Large')).click();
+    await waitFor(async () => (await readFontSizes())[0] === '24px');
+    assert.deepEqual(await readFontSizes(), ['24px', '16px']);
+
+    for (const width of [250, frame.width, 550, 300]) {
+      const height = Math.round(width * frame.height / frame.width);
       window.setContentSize(width, height);
-      await waitFor(async () => {
-        const outerWidth = await window.webContents.executeJavaScript('window.outerWidth');
-        return outerWidth === width;
-      });
+      await waitFor(() => window.getContentSize()[0] === width);
       // Allow the resize event and compositor update to finish before capturing.
       await new Promise(resolve => setTimeout(resolve, 300));
 
-      const viewport = await window.webContents.executeJavaScript('[window.innerWidth, window.innerHeight]');
-      assert.deepEqual(viewport, [device.width, device.height]);
+      const viewport = await contents.executeJavaScript('[window.innerWidth, window.innerHeight, screen.width, screen.height]');
+      assert.deepEqual(viewport, [frame.viewportWidth, frame.viewportHeight, device.width, device.height]);
 
-      const image = await window.capturePage();
+      const image = await contents.capturePage();
       const size = image.getSize();
       const factor = screen.getDisplayMatching(window.getBounds()).scaleFactor;
-      assert.ok(Math.abs(size.width - width * factor) <= 2, `Unexpected captured width ${size.width} for ${width}`);
-      assert.ok(Math.abs(size.height - height * factor) <= 2, `Unexpected captured height ${size.height} for ${height}`);
+      const scale = Math.min(width / frame.width, height / frame.height);
+      assert.ok(Math.abs(size.width - Math.round(frame.viewportWidth * scale) * factor) <= 3,
+        `Unexpected captured width ${size.width} for ${width}`);
+      assert.ok(Math.abs(size.height - Math.round(frame.viewportHeight * scale) * factor) <= 3,
+        `Unexpected captured height ${size.height} for ${height}`);
 
       const bitmap = image.toBitmap();
       const x = size.width - Math.round(10 * factor);

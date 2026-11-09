@@ -3,6 +3,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { createPreviewRequest, DEVICE_IDS } from './desktop/request.js';
+import { presentationFor, TEXT_SIZES } from './desktop/presentation.js';
+import { ALL_DEVICES } from './public/devices.js';
 
 export async function startMcp(version) {
   const server = new McpServer({ name: 'viewports', version });
@@ -16,10 +18,12 @@ export async function startMcp(version) {
       url: z.string().describe('Complete HTTP(S) URL, including a localhost port when applicable.'),
       devices: z.array(z.enum(DEVICE_IDS)).min(1).optional()
         .describe('Device preset IDs. Defaults to iPhone 17, iPad Pro 11, and Desktop HD.'),
+      textSize: z.enum(Object.keys(TEXT_SIZES)).optional()
+        .describe('Browser default text size. Defaults to default.'),
     },
-  }, async ({ url, devices }) => {
+  }, async ({ url, devices, textSize }) => {
     try {
-      const request = createPreviewRequest(url, devices);
+      const request = createPreviewRequest(url, devices, textSize);
       const { launchDesktop } = await import('./desktop/launch.js');
       const result = await launchDesktop(request, { managed: true });
       if (clientClosed) {
@@ -28,7 +32,12 @@ export async function startMcp(version) {
       }
       const sessionId = randomUUID();
       sessions.set(sessionId, result);
-      const value = { sessionId, url: result.url, devices: result.devices };
+      const value = {
+        sessionId,
+        url: result.url,
+        devices: result.devices.map(withViewport),
+        textSize: result.textSize,
+      };
       const names = result.devices.map(({ name }) => name).join(', ');
       return {
         content: [{ type: 'text', text: `Opened ${names} for ${result.url}. Session: ${sessionId}` }],
@@ -47,11 +56,22 @@ export async function startMcp(version) {
     device: z.enum(DEVICE_IDS).describe('Device preset ID.'),
   };
 
-  async function updateSession(sessionId, action, device) {
+  function withViewport(device) {
+    const presentation = presentationFor(device);
+    return { ...device, viewportWidth: presentation.viewportWidth, viewportHeight: presentation.viewportHeight };
+  }
+
+  async function updateSession(sessionId, action, device, value) {
     const session = sessions.get(sessionId);
     if (!session) throw new Error('Preview session was not found. Open a new preview.');
-    const result = await session.control.request(action, device);
-    return { sessionId, url: session.url, devices: result.devices };
+    const result = await session.control.request(action, device, value);
+    return {
+      sessionId,
+      url: session.url,
+      devices: result.devices,
+      viewports: result.devices.map(id => withViewport(ALL_DEVICES.find(device => device.id === id))),
+      textSize: result.textSize,
+    };
   }
 
   function response(value) {
@@ -90,6 +110,21 @@ export async function startMcp(version) {
       }
     });
   }
+
+  server.registerTool('set_text_size', {
+    title: 'Change preview text size',
+    description: 'Set the browser default text size for all devices in an existing preview session.',
+    inputSchema: {
+      ...sessionSchema,
+      textSize: z.enum(Object.keys(TEXT_SIZES)),
+    },
+  }, async ({ sessionId, textSize }) => {
+    try {
+      return response(await updateSession(sessionId, 'text-size', undefined, textSize));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
 
   process.stdin.once('end', () => {
     clientClosed = true;

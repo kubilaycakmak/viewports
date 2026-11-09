@@ -1,14 +1,20 @@
-import { app, BrowserWindow, dialog, Menu, screen } from 'electron';
+import { app, BrowserWindow, dialog, Menu, screen, WebContentsView } from 'electron';
 import { createInterface } from 'node:readline';
+import { fileURLToPath } from 'node:url';
 import { ALL_DEVICES, DEVICE_GROUPS } from '../public/devices.js';
 import { createPreviewRequest, STARTUP_MESSAGE } from './request.js';
+import { mobileUserAgent, presentationFor, TEXT_SIZES } from './presentation.js';
 
 const PADDING = 20;
 const GAP = 12;
 const TITLE_BAR_SPACE = 48;
 const windows = new Map();
 const opening = new Map();
+const previews = new WeakMap();
+const chromePath = fileURLToPath(new URL('./chrome.html', import.meta.url));
 let targetUrl;
+let currentTextSize = 'default';
+let textSizeUpdates = Promise.resolve();
 let controlled = process.env.VIEWPORTS_CONTROL === 'stdio';
 
 function updateMenu() {
@@ -27,6 +33,15 @@ function updateMenu() {
           enabled: !opening.has(device.id),
           click: () => toggleDevice(device),
         })),
+      })),
+    },
+    {
+      label: 'Text Size',
+      submenu: Object.entries(TEXT_SIZES).map(([id, size]) => ({
+        label: `${size.label} (${Math.round(size.scale * 100)}%)`,
+        type: 'radio',
+        checked: id === currentTextSize,
+        click: () => setTextSize(id).catch(error => dialog.showErrorBox('Could not change text size', error.message)),
       })),
     },
     { role: 'viewMenu' },
@@ -53,10 +68,11 @@ function addDevice(device) {
 
   const operation = Promise.resolve().then(async () => {
     const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-    const scale = Math.min(1, (workArea.width - 2 * PADDING) / device.width,
-      (workArea.height - 2 * PADDING - TITLE_BAR_SPACE) / device.height);
-    const width = Math.ceil(device.width * scale);
-    const height = Math.ceil(device.height * scale);
+    const frame = presentationFor(device);
+    const scale = Math.min(1, (workArea.width - 2 * PADDING) / frame.width,
+      (workArea.height - 2 * PADDING - TITLE_BAR_SPACE) / frame.height);
+    const width = Math.ceil(frame.width * scale);
+    const height = Math.ceil(frame.height * scale);
     const offset = Math.min(windows.size * 32, 160);
     const bounds = {
       x: workArea.x + Math.min(PADDING + offset, workArea.width - width - PADDING),
@@ -64,7 +80,7 @@ function addDevice(device) {
       width,
       height,
     };
-    const window = await openWindow(device, targetUrl, bounds, scale);
+    const window = await openWindow(device, targetUrl, bounds);
     window.show();
   }).finally(() => {
     opening.delete(device.id);
@@ -93,6 +109,39 @@ async function removeDevice(device) {
   });
 }
 
+async function applyTextSize(contents, textSize) {
+  const size = TEXT_SIZES[textSize];
+  await contents.debugger.sendCommand('Page.setFontSizes', {
+    fontSizes: { standard: size.fontSize, fixed: Math.round(13 * size.scale) },
+  });
+  await contents.debugger.sendCommand('Emulation.setEmulatedOSTextScale', { scale: size.scale });
+}
+
+function setTextSize(textSize) {
+  if (!Object.hasOwn(TEXT_SIZES, textSize)) return Promise.reject(new Error('Unknown text size.'));
+  const operation = textSizeUpdates.then(async () => {
+    const previous = currentTextSize;
+    currentTextSize = textSize;
+    const applyToOpenWindows = size => Promise.all([...windows.values()].map(async window => {
+      const contents = previews.get(window)?.contents;
+      if (contents && !contents.isDestroyed() && contents.debugger.isAttached()) {
+        await applyTextSize(contents, size);
+      }
+    }));
+    try {
+      await applyToOpenWindows(textSize);
+    } catch (error) {
+      currentTextSize = previous;
+      await applyToOpenWindows(previous).catch(() => {});
+      throw error;
+    } finally {
+      updateMenu();
+    }
+  });
+  textSizeUpdates = operation.catch(() => {});
+  return operation;
+}
+
 function startControl() {
   const input = createInterface({ input: process.stdin });
   let queue = Promise.resolve();
@@ -101,14 +150,16 @@ function startControl() {
       let message;
       try {
         message = JSON.parse(line);
-        if (message.action !== 'status') {
+        if (message.action === 'text-size') {
+          await setTextSize(message.value);
+        } else if (message.action !== 'status') {
           const device = ALL_DEVICES.find(item => item.id === message.device);
           if (!device || !['add', 'remove'].includes(message.action)) {
             throw new Error('Unknown device or action.');
           }
           await (message.action === 'add' ? addDevice(device) : removeDevice(device));
         }
-        report({ id: message.id, devices: [...windows.keys()] });
+        report({ id: message.id, devices: [...windows.keys()], textSize: currentTextSize });
       } catch (error) {
         report({ id: message?.id, error: error.message });
       }
@@ -117,6 +168,38 @@ function startControl() {
   input.on('close', () => {
     controlled = false;
     if (windows.size === 0) app.quit();
+  });
+}
+
+async function applyMetrics(window, device) {
+  const { contents, view, frame } = previews.get(window);
+  const [width, height] = window.getContentSize();
+  const scale = Math.min(width / frame.width, height / frame.height);
+  if (scale <= 0) return;
+
+  if (view) {
+    const x = Math.round(frame.bezel * scale);
+    const y = Math.round((frame.bezel + frame.top) * scale);
+    view.setBounds({
+      x,
+      y,
+      width: Math.max(1, Math.round(frame.viewportWidth * scale)),
+      height: Math.max(1, Math.round(frame.viewportHeight * scale)),
+    });
+    await window.webContents.executeJavaScript(
+      `document.getElementById('device').style.setProperty('--scale', ${JSON.stringify(scale)})`,
+    );
+  }
+
+  await contents.debugger.sendCommand('Emulation.setDeviceMetricsOverride', {
+    width: frame.viewportWidth,
+    height: frame.viewportHeight,
+    screenWidth: device.width,
+    screenHeight: device.height,
+    deviceScaleFactor: frame.pixelRatio,
+    mobile: device.type === 'mobile' || device.type === 'tablet',
+    dontSetVisibleSize: true,
+    scale,
   });
 }
 
@@ -129,20 +212,9 @@ function updateScale(window, device) {
     if (updating) return;
     updating = true;
     try {
-      while (pending && !window.isDestroyed() && window.webContents.debugger.isAttached()) {
+      while (pending && !window.isDestroyed() && previews.get(window).contents.debugger.isAttached()) {
         pending = false;
-        const [width, height] = window.getContentSize();
-        const scale = Math.min(width / device.width, height / device.height);
-        if (scale > 0) {
-          await window.webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride', {
-            width: device.width,
-            height: device.height,
-            deviceScaleFactor: 0,
-            mobile: false,
-            dontSetVisibleSize: true,
-            scale,
-          });
-        }
+        await applyMetrics(window, device);
       }
     } catch {
       // The window or its debugging session may close during a resize.
@@ -152,46 +224,67 @@ function updateScale(window, device) {
   });
 }
 
-async function openWindow(device, url, bounds, scale) {
+async function openWindow(device, url, bounds) {
+  const frame = presentationFor(device);
   const window = new BrowserWindow({
     ...bounds,
     title: device.name,
     useContentSize: true,
     resizable: true,
     show: false,
+    backgroundColor: '#09090b',
+    webPreferences: {
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      partition: frame.bezel ? `viewports-shell-${device.id}` : 'viewports-preview',
+    },
+  });
+
+  const view = frame.bezel ? new WebContentsView({
     webPreferences: {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
       partition: 'viewports-preview',
     },
-  });
-
+  }) : null;
+  const contents = view ? view.webContents : window.webContents;
+  const userAgent = mobileUserAgent(device, process.versions.chrome);
+  if (userAgent) contents.setUserAgent(userAgent);
+  previews.set(window, { contents, view, frame });
   windows.set(device.id, window);
+
   window.on('closed', () => {
+    if (view && !contents.isDestroyed()) contents.close();
     windows.delete(device.id);
     updateMenu();
   });
   window.on('page-title-updated', event => event.preventDefault());
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  window.setAspectRatio(device.width / device.height);
+  contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.setAspectRatio(frame.width / frame.height);
 
   try {
-    await window.loadURL('about:blank');
-    const debuggerSession = window.webContents.debugger;
-    debuggerSession.attach();
-    // Keep the rendered surface sized to the window while emulating the device viewport.
-    await debuggerSession.sendCommand('Emulation.setDeviceMetricsOverride', {
-      width: device.width,
-      height: device.height,
-      deviceScaleFactor: 0,
-      mobile: false,
-      dontSetVisibleSize: true,
-      scale,
-    });
-
+    if (view) {
+      await window.loadFile(chromePath, { query: {
+        id: device.id,
+        kind: frame.kind,
+        width: String(frame.width),
+        height: String(frame.height),
+        top: String(frame.top),
+        bottom: String(frame.bottom),
+        host: new URL(url).host,
+      } });
+      window.contentView.addChildView(view);
+    }
+    await contents.loadURL('about:blank');
+    contents.debugger.attach();
+    await applyMetrics(window, device);
+    await applyTextSize(contents, currentTextSize);
+    if (view) await contents.debugger.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: true });
     updateScale(window, device);
-    await window.loadURL(url);
+    await contents.loadURL(url);
+    await applyTextSize(contents, currentTextSize);
     return window;
   } catch (error) {
     if (!window.isDestroyed()) window.destroy();
@@ -209,9 +302,9 @@ function layoutDevices(devices, workArea) {
     for (let index = 0; index < devices.length; index += columns) {
       rows.push(devices.slice(index, index + columns));
     }
-    const width = Math.max(...rows.map(row => row.reduce((sum, device) => sum + device.width, 0)
+    const width = Math.max(...rows.map(row => row.reduce((sum, device) => sum + presentationFor(device).width, 0)
       + GAP * (row.length - 1)));
-    const height = rows.reduce((sum, row) => sum + Math.max(...row.map(device => device.height)), 0);
+    const height = rows.reduce((sum, row) => sum + Math.max(...row.map(device => presentationFor(device).height)), 0);
     const scale = Math.min(1, availableWidth / width,
       (availableHeight - rows.length * TITLE_BAR_SPACE - (rows.length - 1) * GAP) / height);
     if (!best || scale > best.scale) best = { rows, scale };
@@ -222,12 +315,13 @@ function layoutDevices(devices, workArea) {
   for (const row of best.rows) {
     let x = workArea.x + PADDING;
     for (const device of row) {
-      const width = Math.ceil(device.width * best.scale);
-      const height = Math.ceil(device.height * best.scale);
+      const frame = presentationFor(device);
+      const width = Math.ceil(frame.width * best.scale);
+      const height = Math.ceil(frame.height * best.scale);
       placements.push({ device, bounds: { x, y, width, height } });
       x += width + GAP;
     }
-    y += Math.ceil(Math.max(...row.map(device => device.height)) * best.scale) + TITLE_BAR_SPACE + GAP;
+    y += Math.ceil(Math.max(...row.map(device => presentationFor(device).height)) * best.scale) + TITLE_BAR_SPACE + GAP;
   }
   return { ...best, placements };
 }
@@ -242,14 +336,18 @@ app.on('window-all-closed', () => {
 });
 
 app.whenReady().then(async () => {
-  const [url, ...deviceIds] = process.argv.slice(2);
-  const request = createPreviewRequest(url, deviceIds);
+  const [url, ...arguments_] = process.argv.slice(2);
+  const textSizeOption = arguments_.find(value => value.startsWith('--text-size='));
+  const textSize = textSizeOption ? textSizeOption.slice('--text-size='.length) : 'default';
+  const deviceIds = arguments_.filter(value => !value.startsWith('--text-size='));
+  const request = createPreviewRequest(url, deviceIds, textSize);
   targetUrl = request.url;
+  currentTextSize = request.textSize;
 
   const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   const layout = layoutDevices(request.devices, workArea);
   const opened = await Promise.all(layout.placements.map(({ device, bounds }) =>
-    openWindow(device, targetUrl, bounds, layout.scale)));
+    openWindow(device, targetUrl, bounds)));
 
   updateMenu();
   for (const window of opened) window.show();

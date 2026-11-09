@@ -30,8 +30,11 @@ let sessionId;
 try {
   await client.connect(transport);
   const url = `http://127.0.0.1:${server.address().port}/`;
-  const opened = await call('open_preview', { url, devices: ['iphone-se', 'desktop-hd'] });
+  const opened = await call('open_preview', { url, devices: ['iphone-se', 'desktop-hd'], textSize: 'large' });
   sessionId = opened.sessionId;
+  assert.equal(opened.textSize, 'large');
+  assert.deepEqual([opened.devices[0].viewportWidth, opened.devices[0].viewportHeight], [375, 559]);
+  assert.equal((await call('set_text_size', { sessionId, textSize: 'extra-large' })).textSize, 'extra-large');
   assert.deepEqual(opened.devices.map(device => device.id), ['iphone-se', 'desktop-hd']);
   const added = await Promise.all([
     call('add_device', { sessionId, device: 'ipad-mini' }),
@@ -42,7 +45,10 @@ try {
   }
   assert.deepEqual((await call('remove_device', { sessionId, device: 'iphone-se' })).devices,
     ['desktop-hd', 'ipad-mini']);
-  assert.deepEqual((await call('list_devices', { sessionId })).devices, ['desktop-hd', 'ipad-mini']);
+  const status = await call('list_devices', { sessionId });
+  assert.deepEqual(status.devices, ['desktop-hd', 'ipad-mini']);
+  assert.equal(status.textSize, 'extra-large');
+  assert.deepEqual([status.viewports[1].viewportWidth, status.viewports[1].viewportHeight], [768, 928]);
   await call('remove_device', { sessionId, device: 'desktop-hd' });
   assert.deepEqual((await call('remove_device', { sessionId, device: 'ipad-mini' })).devices, []);
   assert.deepEqual((await call('add_device', { sessionId, device: 'iphone-17' })).devices, ['iphone-17']);

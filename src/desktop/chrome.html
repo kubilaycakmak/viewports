@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Viewports</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      overflow: hidden;
+      background: #09090b;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .device {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: calc(var(--width) * 1px);
+      height: calc(var(--height) * 1px);
+      transform: scale(var(--scale));
+      transform-origin: top left;
+      background: #09090b;
+    }
+
+    .screen {
+      position: absolute;
+      inset: 8px;
+      overflow: hidden;
+      border-radius: 30px;
+      background: #f4f4f6;
+    }
+
+    .status {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: var(--status-height);
+      padding: 5px 24px 0;
+      color: #111;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .island {
+      position: absolute;
+      top: 9px;
+      left: 50%;
+      width: 104px;
+      height: 29px;
+      transform: translateX(-50%);
+      border-radius: 22px;
+      background: #101010;
+    }
+
+    .indicators {
+      font-size: 11px;
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+
+    .battery {
+      position: relative;
+      display: inline-block;
+      width: 22px;
+      height: 10px;
+      margin-left: 3px;
+      border: 1.5px solid currentColor;
+      border-radius: 3px;
+      vertical-align: -1px;
+    }
+
+    .battery:before {
+      display: block;
+      width: 15px;
+      height: 5px;
+      margin: 1px;
+      border-radius: 1px;
+      background: currentColor;
+      content: '';
+    }
+
+    .battery:after {
+      position: absolute;
+      top: 2px;
+      right: -4px;
+      width: 2px;
+      height: 4px;
+      border-radius: 0 2px 2px 0;
+      background: currentColor;
+      content: '';
+    }
+
+    .bar {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      height: var(--bottom);
+      padding: 7px 15px 0;
+      background: #f4f4f6;
+      color: #4b4c51;
+    }
+
+    .address {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      height: 36px;
+      overflow: hidden;
+      border-radius: 11px;
+      background: #e4e4e8;
+      color: #25262a;
+      font-size: 14px;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .url {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tools {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 29px;
+      padding: 0 12px;
+      color: #555963;
+      font-size: 18px;
+    }
+
+    .gesture {
+      position: absolute;
+      bottom: 6px;
+      left: 50%;
+      width: 120px;
+      height: 5px;
+      transform: translateX(-50%);
+      border-radius: 8px;
+      background: #17171a;
+    }
+
+    .top-address {
+      display: none;
+      margin: 0 12px;
+    }
+
+    .android .status, .tablet .status {
+      height: 25px;
+    }
+
+    .android .top-address, .tablet .top-address {
+      display: flex;
+    }
+
+    .android .bar, .tablet .bar {
+      padding: 0;
+    }
+
+    .android .bar .address, .android .tools,
+    .tablet .bar .address, .tablet .tools {
+      display: none;
+    }
+
+    .se .island, .android .island, .tablet .island {
+      display: none;
+    }
+
+    .se .status {
+      padding-top: 0;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div class="device" id="device">
+    <div class="screen">
+      <div class="status">
+        <span>9:41</span>
+        <span class="island"></span>
+        <span class="indicators">▰ ▰ ◖ <span class="battery"></span></span>
+      </div>
+      <div class="address top-address">
+        <span>⌕</span>
+        <span class="url"></span>
+        <span>↻</span>
+      </div>
+      <div class="bar">
+        <div class="address">
+          <span>ᴀA</span>
+          <span class="url"></span>
+          <span>↻</span>
+        </div>
+        <div class="tools">
+          <span>‹</span><span>›</span><span>□↑</span><span>♧</span><span>▢</span>
+        </div>
+        <span class="gesture"></span>
+      </div>
+    </div>
+  </div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const device = document.getElementById('device');
+
+    device.classList.add(params.get('kind'));
+    if (params.get('id') === 'iphone-se') device.classList.add('se');
+    device.style.setProperty('--width', params.get('width'));
+    device.style.setProperty('--height', params.get('height'));
+    device.style.setProperty('--bottom', params.get('bottom') + 'px');
+    device.style.setProperty('--status-height', params.get('top') + 'px');
+
+    for (const element of document.querySelectorAll('.url')) {
+      element.textContent = params.get('host');
+    }
+  </script>
+</body>
+</html>

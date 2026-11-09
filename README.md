@@ -21,10 +21,14 @@ npm start -- http://localhost:3000
 
 The first desktop launch downloads Electron. If the official download has a temporary network error, Viewports retries and then uses the mirror documented by Electron. The Electron installer verifies the archive against the checksums bundled with the npm package. Custom Electron mirror settings are respected.
 
-It opens an iPhone 17, iPad Pro 11, and Desktop HD, arranged to fit the display. Select presets with `--devices`. Resize a window by dragging its edge. Each device retains its viewport dimensions and aspect ratio. Use the **Devices** menu to add or remove devices while the session is open.
+In an interactive terminal, select the devices and text size with the keyboard. iPhone 17, iPad Pro 11, and Desktop HD are preselected. Pass `--devices` to open selected presets directly. Resize a window by dragging its edge. Use the **Devices** and **Text Size** menus to update the open session. The selected text size applies to every device in that session.
+
+Phones and tablets show an illustrative browser frame. The address and navigation icons are visual placeholders. The page viewport accounts for the displayed browser and status areas. These areas are fixed approximations; actual device UI changes with browser, OS, scrolling, and display settings. The page runs in Chromium with a representative mobile user agent and touch emulation. iPhone and iPad presets use reference pixel ratios; Android pixel ratios follow the host display.
+
+Text size changes the browser's default font size to 16, 20, or 24 CSS pixels and sets Chromium's OS text scale. Relative text can grow, while text explicitly sized in CSS pixels may remain unchanged. This approximates accessibility settings and does not reproduce every device's system text behavior.
 
 ```bash
-npx --yes --package='git+https://github.com/kubilaycakmak/viewports.git#dev' viewports http://localhost:3000/checkout --devices iphone-17,desktop-hd
+npx --yes --package='git+https://github.com/kubilaycakmak/viewports.git#dev' viewports http://localhost:3000/checkout --devices iphone-17,desktop-hd --text-size large
 npx --yes --package='git+https://github.com/kubilaycakmak/viewports.git#dev' viewports --help
 ```
 
@@ -47,7 +51,7 @@ Configure your local MCP client to launch the development branch through npx:
 }
 ```
 
-Ask the agent to “Open checkout at http://localhost:3000/checkout on an iPhone and desktop.” The `open_preview` tool opens the desktop windows and returns a session ID. The agent can use `add_device`, `remove_device`, and `list_devices` with that ID to manage the open session. Device selections made through the desktop menu are reflected in `list_devices`.
+Ask the agent to “Open checkout at http://localhost:3000/checkout on an iPhone and desktop.” The `open_preview` tool opens the desktop windows and returns a session ID. The agent can use `add_device`, `remove_device`, `list_devices`, and `set_text_size` with that ID to manage the open session. Device selections made through the desktop menu are reflected in `list_devices`. Tool results include each device’s screen and page viewport dimensions.
 
 Run the MCP server on the computer with the graphical desktop you want to use. Session IDs belong to the active MCP connection. When the connection closes, open windows stay on the desktop and can be managed through the Devices menu. A new MCP connection can open a new preview session.
 
@@ -74,10 +78,12 @@ Run `npm start -- web http://localhost:3000` to open the original canvas in your
 
 ## 📱 Device Presets
 
+The listed sizes represent the device screen in CSS pixels. The page viewport is shorter when browser controls are shown.
+
 | Category | Device | Width | Height |
 |----------|--------|------:|-------:|
-| Mobile | iPhone 17 | 393 | 852 |
-| Mobile | iPhone 17 Air | 393 | 852 |
+| Mobile | iPhone 17 | 402 | 874 |
+| Mobile | iPhone Air | 420 | 912 |
 | Mobile | iPhone 17 Pro | 402 | 874 |
 | Mobile | iPhone 17 Pro Max | 440 | 956 |
 | Mobile | Galaxy S26 | 360 | 780 |
@@ -100,7 +106,7 @@ Run `npm start -- web http://localhost:3000` to open the original canvas in your
 | Desktop | Desktop 2K | 2560 | 1440 |
 | Desktop | Desktop 4K | 3840 | 2160 |
 
-> **➕ Custom devices** — click the `+` button in the toolbar to add any resolution.
+> **➕ Custom devices** — in browser canvas mode, click the `+` button in the toolbar to add any resolution.
 
 ---
 

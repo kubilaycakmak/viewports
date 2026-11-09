@@ -8,7 +8,7 @@ import { STARTUP_MESSAGE } from './request.js';
 const electronCli = createRequire(import.meta.url).resolve('electron/cli.js');
 const desktopEntry = fileURLToPath(new URL('./main.js', import.meta.url));
 
-export async function launchDesktop({ url, devices }, { managed = false } = {}) {
+export async function launchDesktop({ url, devices, textSize = 'default' }, { managed = false } = {}) {
   await ensureElectron();
 
   const env = { ...process.env };
@@ -17,7 +17,8 @@ export async function launchDesktop({ url, devices }, { managed = false } = {}) 
   else delete env.VIEWPORTS_CONTROL;
 
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [electronCli, desktopEntry, url, ...devices.map(({ id }) => id)], {
+    const args = [electronCli, desktopEntry, url, ...devices.map(({ id }) => id), `--text-size=${textSize}`];
+    const child = spawn(process.execPath, args, {
       detached: true,
       stdio: [managed ? 'pipe' : 'ignore', 'pipe', 'pipe'],
       env,
@@ -57,9 +58,10 @@ export async function launchDesktop({ url, devices }, { managed = false } = {}) 
         resolve({
           url,
           devices,
+          textSize,
           control: {
             disconnect,
-            request(action, device) {
+            request(action, device, value) {
               if (disconnected) return Promise.reject(new Error('Preview session closed.'));
               const id = ++nextId;
               return new Promise((resolveRequest, rejectRequest) => {
@@ -71,7 +73,7 @@ export async function launchDesktop({ url, devices }, { managed = false } = {}) 
                   resolve: value => { clearTimeout(timer); resolveRequest(value); },
                   reject: error => { clearTimeout(timer); rejectRequest(error); },
                 });
-                child.stdin.write(JSON.stringify({ id, action, device }) + '\n', error => {
+                child.stdin.write(JSON.stringify({ id, action, device, value }) + '\n', error => {
                   if (error) {
                     pending.get(id)?.reject(error);
                     pending.delete(id);
@@ -83,7 +85,7 @@ export async function launchDesktop({ url, devices }, { managed = false } = {}) 
         });
       } else {
         disconnect();
-        resolve({ url, devices });
+        resolve({ url, devices, textSize });
       }
     }
 

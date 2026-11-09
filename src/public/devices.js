@@ -3,8 +3,8 @@ export const DEVICE_GROUPS = [
     label: 'Mobile',
     devices: [
       // ── iPhone 17 series (2025) ──
-      { id: 'iphone-17',          name: 'iPhone 17',          width: 393,  height: 852,  type: 'mobile' },
-      { id: 'iphone-17-air',      name: 'iPhone 17 Air',      width: 393,  height: 852,  type: 'mobile' },
+      { id: 'iphone-17',          name: 'iPhone 17',          width: 402,  height: 874,  type: 'mobile' },
+      { id: 'iphone-17-air',      name: 'iPhone Air',         width: 420,  height: 912,  type: 'mobile' },
       { id: 'iphone-17-pro',      name: 'iPhone 17 Pro',      width: 402,  height: 874,  type: 'mobile' },
       { id: 'iphone-17-pro-max',  name: 'iPhone 17 Pro Max',  width: 440,  height: 956,  type: 'mobile' },
       // ── Galaxy S26 series (2026) ──
