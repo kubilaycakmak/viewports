@@ -8,12 +8,13 @@ export const DEFAULT_AREAS = { top: true, bottom: true };
 
 export function presentationFor(device, areas = DEFAULT_AREAS) {
   if (device.type !== 'mobile' && device.type !== 'tablet') {
+    const top = areas.top ? 48 : 0;
     return {
       width: device.width,
       height: device.height,
       viewportWidth: device.width,
-      viewportHeight: device.height,
-      top: 0,
+      viewportHeight: device.height - top,
+      top,
       bottom: 0,
       bezel: 0,
       kind: 'desktop',

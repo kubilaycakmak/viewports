@@ -15,6 +15,11 @@ async function waitFor(check) {
 
 async function run() {
   const server = createServer((request, response) => {
+    if (request.url === '/redirect') {
+      response.writeHead(302, { Location: '/redirected' });
+      response.end();
+      return;
+    }
     response.writeHead(200, { 'Content-Type': 'text/html' });
     response.end(`<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1">
       <button id="click" onclick="window.clicked = true">Click</button>
@@ -65,12 +70,21 @@ async function run() {
     }
 
     const phone = all.find(item => item.window.getTitle() === 'iPhone 17');
+    const desktop = all.find(item => item.window.getTitle() === 'Desktop HD');
+    assert.deepEqual(await desktop.window.webContents.executeJavaScript(`[
+      getComputedStyle(document.querySelector('.top-address')).display,
+      getComputedStyle(document.querySelector('.bar')).display,
+      document.querySelector('.top-address input').value
+    ]`), ['flex', 'none', url]);
     async function toggleArea(name, checked, expectedHeight) {
       const menu = Menu.getApplicationMenu().items.find(item => item.label === 'Device Areas');
       menu.submenu.items.find(item => item.label === name).click({ checked });
       await waitFor(async () => (await phone.contents.executeJavaScript('innerHeight')) === expectedHeight);
     }
     await toggleArea('Top Area', false, 792);
+    await waitFor(async () => (await desktop.contents.executeJavaScript('innerHeight')) === 1080);
+    assert.equal(await desktop.window.webContents.executeJavaScript(
+      "getComputedStyle(document.querySelector('.top-address')).display"), 'none');
     await toggleArea('Bottom Area', false, 874);
     assert.deepEqual(await phone.window.webContents.executeJavaScript(`[
       document.getElementById('device').classList.contains('hide-top'),
@@ -78,6 +92,7 @@ async function run() {
     ]`), [true, true]);
     await toggleArea('Top Area', true, 820);
     await toggleArea('Bottom Area', true, 738);
+    await waitFor(async () => (await desktop.contents.executeJavaScript('innerHeight')) === 1032);
 
     const menu = Menu.getApplicationMenu().items.find(item => item.label === 'Text Size');
     menu.submenu.items.find(item => item.label.startsWith('Extra Large')).click();
@@ -104,6 +119,36 @@ async function run() {
     phone.contents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
     phone.contents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
     await waitFor(() => phone.contents.executeJavaScript('window.clicked === true'));
+    const nextUrl = url + 'another-page';
+    await desktop.window.webContents.executeJavaScript(`(() => {
+      const form = document.querySelector('.top-address');
+      form.querySelector('input').value = ${JSON.stringify(nextUrl)};
+      form.requestSubmit();
+    })()`);
+    await waitFor(() => all.every(item => item.contents.getURL() === nextUrl && !item.contents.isLoading()));
+    await waitFor(() => phone.window.webContents.executeJavaScript(
+      `document.querySelector('.bar input').value === ${JSON.stringify(nextUrl)}`));
+    await phone.window.webContents.executeJavaScript(`(() => {
+      const form = document.querySelector('.bar form');
+      form.querySelector('input').value = 'javascript:alert(1)';
+      form.requestSubmit();
+    })()`);
+    await waitFor(() => phone.window.webContents.executeJavaScript("document.querySelector('.bar form').classList.contains('invalid')"));
+    assert.ok(all.every(item => item.contents.getURL() === nextUrl));
+    await desktop.window.webContents.executeJavaScript(`(() => {
+      const form = document.querySelector('.top-address');
+      form.querySelector('input').value = ${JSON.stringify(`127.0.0.1:${server.address().port}/redirect`)};
+      form.requestSubmit();
+    })()`);
+    const redirectedUrl = url + 'redirected';
+    await waitFor(() => all.every(item => item.contents.getURL() === redirectedUrl && !item.contents.isLoading()));
+    await waitFor(() => desktop.window.webContents.executeJavaScript(
+      `document.querySelector('.top-address input').value === ${JSON.stringify(redirectedUrl)}`));
+    const devicesMenu = Menu.getApplicationMenu().items.find(item => item.label === 'Devices');
+    devicesMenu.submenu.items.flatMap(group => group.submenu.items)
+      .find(item => item.label.startsWith('iPhone SE ')).click();
+    await waitFor(() => BrowserWindow.getAllWindows().some(window => window.getTitle() === 'iPhone SE'
+      && window.contentView.children.some(view => view.webContents?.getURL() === redirectedUrl || view.webContents?.getURL() === url + 'redirect')));
     console.log('Desktop presentation test passed.');
   } finally {
     server.closeAllConnections();

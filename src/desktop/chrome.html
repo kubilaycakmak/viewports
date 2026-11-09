@@ -122,8 +122,51 @@
     }
 
     .url {
-      overflow: hidden;
+      flex: 1;
+      min-width: 0;
+      padding: 0;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
       text-overflow: ellipsis;
+    }
+
+    .address {
+      padding: 0 12px;
+    }
+
+    .address:focus-within {
+      outline: 2px solid #7367f0;
+    }
+
+    .address.invalid {
+      outline: 2px solid #c0392b;
+    }
+
+    .address button {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .desktop .screen {
+      inset: 0;
+      border-radius: 0;
+    }
+
+    .desktop .status, .desktop .bar {
+      display: none;
+    }
+
+    .desktop .top-address {
+      display: flex;
+      height: 34px;
+      margin: 7px 12px;
     }
 
     .tools {
@@ -170,7 +213,7 @@
     }
 
     .hide-top .status, .hide-top .top-address,
-    .hide-bottom .bar {
+    .desktop.hide-top .top-address, .hide-bottom .bar {
       display: none;
     }
 
@@ -192,17 +235,17 @@
         <span class="island"></span>
         <span class="indicators">▰ ▰ ◖ <span class="battery"></span></span>
       </div>
-      <div class="address top-address">
-        <span>⌕</span>
-        <span class="url"></span>
-        <span>↻</span>
-      </div>
+      <form class="address top-address">
+        <span aria-hidden="true">⌕</span>
+        <input class="url" aria-label="Website address" autocomplete="off" spellcheck="false">
+        <button type="submit" aria-label="Open address">↵</button>
+      </form>
       <div class="bar">
-        <div class="address">
-          <span>ᴀA</span>
-          <span class="url"></span>
-          <span>↻</span>
-        </div>
+        <form class="address">
+          <span aria-hidden="true">ᴀA</span>
+          <input class="url" aria-label="Website address" autocomplete="off" spellcheck="false">
+          <button type="submit" aria-label="Open address">↵</button>
+        </form>
         <div class="tools">
           <span>‹</span><span>›</span><span>□↑</span><span>♧</span><span>▢</span>
         </div>
@@ -221,8 +264,41 @@
     device.style.setProperty('--bottom', params.get('bottom') + 'px');
     device.style.setProperty('--status-height', params.get('top') + 'px');
 
-    for (const element of document.querySelectorAll('.url')) {
-      element.textContent = params.get('host');
+    const inputs = [...document.querySelectorAll('.url')];
+    let currentAddress;
+    function showAddress(address) {
+      currentAddress = address;
+      for (const input of inputs) {
+        if (input !== document.activeElement) input.value = address;
+      }
+    }
+    showAddress(params.get('url'));
+    window.viewports.onAddressChange(address => {
+      if (/^https?:/i.test(address)) showAddress(address);
+    });
+    for (const form of document.querySelectorAll('form.address')) {
+      const input = form.querySelector('.url');
+      form.addEventListener('submit', async event => {
+        event.preventDefault();
+        const result = await window.viewports.navigate(input.value);
+        form.classList.toggle('invalid', !result.ok);
+        input.setCustomValidity(result.ok ? '' : result.error);
+        if (result.ok) {
+          input.blur();
+          showAddress(currentAddress || result.url);
+        } else {
+          input.reportValidity();
+        }
+      });
+      input.addEventListener('blur', () => {
+        input.value = currentAddress;
+        form.classList.remove('invalid');
+        input.setCustomValidity('');
+      });
+      input.addEventListener('input', () => {
+        form.classList.remove('invalid');
+        input.setCustomValidity('');
+      });
     }
   </script>
 </body>

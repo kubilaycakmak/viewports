@@ -34,9 +34,17 @@ try {
   sessionId = opened.sessionId;
   assert.equal(opened.textSize, 'large');
   assert.deepEqual(opened.areas, { top: true, bottom: true });
+  assert.equal(opened.devices[1].viewportHeight, 1032);
+  const nextUrl = url + 'mcp-navigation';
+  const navigated = await call('navigate_preview', { sessionId, url: nextUrl });
+  assert.equal(navigated.url, nextUrl);
+  const rejected = await client.callTool({ name: 'navigate_preview', arguments: { sessionId, url: 'file:///etc/passwd' } });
+  assert.equal(rejected.isError, true);
+  assert.equal((await call('list_devices', { sessionId })).url, nextUrl);
   const hiddenTop = await call('set_device_areas', { sessionId, areas: { top: false, bottom: true } });
   assert.deepEqual(hiddenTop.areas, { top: false, bottom: true });
   assert.equal(hiddenTop.viewports[0].viewportHeight, 585);
+  assert.equal(hiddenTop.viewports[1].viewportHeight, 1080);
   const noAreas = await call('set_device_areas', { sessionId, areas: { top: false, bottom: false } });
   assert.equal(noAreas.viewports[0].viewportHeight, 667);
   const addedWithoutAreas = await call('add_device', { sessionId, device: 'ipad-mini' });

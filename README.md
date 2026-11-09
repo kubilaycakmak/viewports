@@ -25,7 +25,7 @@ In an interactive terminal, select devices, the top and bottom areas, and text s
 
 Pass `--devices` to open selected presets directly. Resize a window by dragging its edge. The **Devices**, **Device Areas**, and **Text Size** application menus also update the open session. Area and text settings apply to every device in that session.
 
-Phones and tablets show an illustrative browser frame. The address and navigation icons are visual placeholders. The page viewport accounts for the displayed browser and status areas. These areas are fixed approximations; actual device UI changes with browser, OS, scrolling, and display settings. The page runs in Chromium with a representative mobile user agent and touch emulation. iPhone and iPad presets use reference pixel ratios; Android pixel ratios follow the host display.
+Phones and tablets show an illustrative browser frame; desktop previews have a top address bar and no bottom area. Enter a website address in any visible address bar to navigate every window in the session. Localhost addresses can be entered without a protocol. Other navigation icons are visual placeholders. The page viewport accounts for the displayed browser and status areas. These areas are fixed approximations; actual device UI changes with browser, OS, scrolling, and display settings. The page runs in Chromium with a representative mobile user agent and touch emulation. iPhone and iPad presets use reference pixel ratios; Android pixel ratios follow the host display.
 
 Text size changes the browser's default font size to 16, 20, or 24 CSS pixels and sets Chromium's OS text scale. Relative text can grow, while text explicitly sized in CSS pixels may remain unchanged. This approximates accessibility settings and does not reproduce every device's system text behavior.
 
@@ -53,7 +53,7 @@ Configure your local MCP client to launch the development branch through npx:
 }
 ```
 
-Ask the agent to “Open checkout at http://localhost:3000/checkout on an iPhone and desktop.” The `open_preview` tool opens the desktop windows and returns a session ID. The agent can use `add_device`, `remove_device`, `list_devices`, `set_device_areas`, and `set_text_size` with that ID to manage the open session. Device selections made through the desktop menu are reflected in `list_devices`. Tool results include each device’s screen and page viewport dimensions.
+Ask the agent to “Open checkout at http://localhost:3000/checkout on an iPhone and desktop.” The `open_preview` tool opens the desktop windows and returns a session ID. The agent can use `add_device`, `remove_device`, `list_devices`, `set_device_areas`, `set_text_size`, and `navigate_preview` with that ID to manage the open session. Device selections made through the desktop menu are reflected in `list_devices`. Tool results include each device’s screen and page viewport dimensions.
 
 Run the MCP server on the computer with the graphical desktop you want to use. Session IDs belong to the active MCP connection. When the connection closes, open windows stay on the desktop and can be managed through the Devices menu. A new MCP connection can open a new preview session.
 

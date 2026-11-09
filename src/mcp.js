@@ -70,7 +70,7 @@ export async function startMcp(version) {
     const result = await session.control.request(action, device, value);
     return {
       sessionId,
-      url: session.url,
+      url: result.url,
       devices: result.devices,
       viewports: result.devices.map(id => withViewport(ALL_DEVICES.find(device => device.id === id), result.areas)),
       textSize: result.textSize,
@@ -114,6 +114,21 @@ export async function startMcp(version) {
       }
     });
   }
+
+  server.registerTool('navigate_preview', {
+    title: 'Change preview website',
+    description: 'Navigate all devices in an existing preview session to a website.',
+    inputSchema: {
+      ...sessionSchema,
+      url: z.string().describe('HTTP(S) website address.'),
+    },
+  }, async ({ sessionId, url }) => {
+    try {
+      return response(await updateSession(sessionId, 'navigate', undefined, url));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
 
   server.registerTool('set_text_size', {
     title: 'Change preview text size',

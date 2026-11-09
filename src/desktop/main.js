@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Menu, screen, WebContentsView } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, screen, WebContentsView } from 'electron';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { ALL_DEVICES, DEVICE_GROUPS } from '../public/devices.js';
@@ -12,11 +12,13 @@ const windows = new Map();
 const opening = new Map();
 const previews = new WeakMap();
 const chromePath = fileURLToPath(new URL('./chrome.html', import.meta.url));
+const preloadPath = fileURLToPath(new URL('./preload.cjs', import.meta.url));
 let targetUrl;
 let currentTextSize = 'default';
 let currentAreas = { ...DEFAULT_AREAS };
 let areaUpdates = Promise.resolve();
 let textSizeUpdates = Promise.resolve();
+let navigationUpdates = Promise.resolve();
 let controlled = process.env.VIEWPORTS_CONTROL === 'stdio';
 
 function updateMenu() {
@@ -194,6 +196,35 @@ function setAreas(areas) {
   return operation;
 }
 
+function normalizeAddress(value) {
+  if (typeof value !== 'string' || !value.trim() || /\s/.test(value.trim())) {
+    throw new Error('Enter a valid website address.');
+  }
+  const address = value.trim();
+  const local = /^(localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d+)?(?:[/?#]|$)/i.test(address);
+  const hostWithPort = /^[^/:]+\.[^/:]+:\d+(?:[/?#]|$)/.test(address);
+  const candidate = local ? `http://${address}`
+    : hostWithPort || !/^[a-z][a-z\d+.-]*:/i.test(address) ? `https://${address}` : address;
+  return createPreviewRequest(candidate).url;
+}
+
+function navigateAll(value) {
+  const url = normalizeAddress(value);
+  const operation = navigationUpdates.then(async () => {
+    targetUrl = url;
+    await Promise.allSettled([...opening.values()]);
+    const results = await Promise.allSettled([...windows.values()].map(window => {
+      const contents = previews.get(window)?.contents;
+      return contents && !contents.isDestroyed() ? contents.loadURL(url) : Promise.resolve();
+    }));
+    const failures = results.filter(result => result.status === 'rejected');
+    if (failures.length) throw new Error(`Could not load the address in ${failures.length} preview window(s).`);
+    return url;
+  });
+  navigationUpdates = operation.catch(() => {});
+  return operation;
+}
+
 function startControl() {
   const input = createInterface({ input: process.stdin });
   let queue = Promise.resolve();
@@ -206,6 +237,8 @@ function startControl() {
           await setTextSize(message.value);
         } else if (message.action === 'areas') {
           await setAreas(message.value);
+        } else if (message.action === 'navigate') {
+          await navigateAll(message.value);
         } else if (message.action !== 'status') {
           const device = ALL_DEVICES.find(item => item.id === message.device);
           if (!device || !['add', 'remove'].includes(message.action)) {
@@ -213,7 +246,7 @@ function startControl() {
           }
           await (message.action === 'add' ? addDevice(device) : removeDevice(device));
         }
-        report({ id: message.id, devices: [...windows.keys()], textSize: currentTextSize, areas: currentAreas });
+        report({ id: message.id, devices: [...windows.keys()], textSize: currentTextSize, areas: currentAreas, url: targetUrl });
       } catch (error) {
         report({ id: message?.id, error: error.message });
       }
@@ -301,19 +334,20 @@ async function openWindow(device, url, bounds) {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
-      partition: frame.bezel ? `viewports-shell-${device.id}` : 'viewports-preview',
+      partition: `viewports-shell-${device.id}`,
+      preload: preloadPath,
     },
   });
 
-  const view = frame.bezel ? new WebContentsView({
+  const view = new WebContentsView({
     webPreferences: {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
       partition: 'viewports-preview',
     },
-  }) : null;
-  const contents = view ? view.webContents : window.webContents;
+  });
+  const contents = view.webContents;
   const userAgent = mobileUserAgent(device, process.versions.chrome);
   if (userAgent) contents.setUserAgent(userAgent);
   previews.set(window, { contents, view, frame });
@@ -326,6 +360,13 @@ async function openWindow(device, url, bounds) {
   });
   window.on('page-title-updated', event => event.preventDefault());
   contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  const updateAddress = (_event, address) => {
+    if (!window.isDestroyed()) window.webContents.send('viewports:address', address);
+  };
+  contents.on('did-navigate', updateAddress);
+  contents.on('did-navigate-in-page', (event, address, isMainFrame) => {
+    if (isMainFrame) updateAddress(event, address);
+  });
   window.setAspectRatio(frame.width / frame.height);
 
   try {
@@ -337,7 +378,7 @@ async function openWindow(device, url, bounds) {
         height: String(frame.height),
         top: String(frame.top),
         bottom: String(frame.bottom),
-        host: new URL(url).host,
+        url,
       } });
       window.contentView.addChildView(view);
     }
@@ -346,7 +387,9 @@ async function openWindow(device, url, bounds) {
     previews.get(window).frame = presentationFor(device, currentAreas);
     await scheduleMetrics(window, device);
     await applyTextSize(contents, currentTextSize);
-    if (view) await contents.debugger.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: true });
+    if (device.type === 'mobile' || device.type === 'tablet') {
+      await contents.debugger.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: true });
+    }
     updateScale(window, device);
     await contents.loadURL(url);
     await applyTextSize(contents, currentTextSize);
@@ -401,6 +444,17 @@ app.on('window-all-closed', () => {
 });
 
 app.whenReady().then(async () => {
+  ipcMain.handle('viewports:navigate', async (event, address) => {
+    const isShell = [...windows.values()].some(window => !window.isDestroyed()
+      && window.webContents === event.sender && event.senderFrame === window.webContents.mainFrame);
+    if (!isShell) return { ok: false, error: 'Navigation is unavailable.' };
+    try {
+      return { ok: true, url: await navigateAll(address) };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  });
+
   const [url, ...arguments_] = process.argv.slice(2);
   const textSizeOption = arguments_.find(value => value.startsWith('--text-size='));
   const areaOption = arguments_.find(value => value.startsWith('--areas='));
