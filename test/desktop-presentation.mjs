@@ -90,8 +90,9 @@ async function run() {
     assert.deepEqual(await desktop.window.webContents.executeJavaScript(`[
       getComputedStyle(document.querySelector('.top-address')).display,
       getComputedStyle(document.querySelector('.bar')).display,
-      document.querySelector('.top-address input').value
-    ]`), ['flex', 'none', url]);
+      document.querySelector('.top-address input').value,
+      getComputedStyle(document.querySelector('.window-controls')).display
+    ]`), ['flex', 'none', url, 'none']);
     async function toggleArea(name, checked, expectedHeight) {
       const menu = Menu.getApplicationMenu().items.find(item => item.label === 'Device Areas');
       menu.submenu.items.find(item => item.label === name).click({ checked });
@@ -163,8 +164,28 @@ async function run() {
     const devicesMenu = Menu.getApplicationMenu().items.find(item => item.label === 'Devices');
     devicesMenu.submenu.items.flatMap(group => group.submenu.items)
       .find(item => item.label.startsWith('iPhone SE ')).click();
-    await waitFor(() => BrowserWindow.getAllWindows().some(window => window.getTitle() === 'iPhone SE'
+    const addedPhone = await waitFor(() => BrowserWindow.getAllWindows().find(window => window.getTitle() === 'iPhone SE'
       && previewViews(window.contentView).some(view => view.webContents?.getURL() === redirectedUrl || view.webContents?.getURL() === url + 'redirect')));
+    async function clickWindowControl(selector) {
+      addedPhone.focus();
+      addedPhone.webContents.focus();
+      const point = await addedPhone.webContents.executeJavaScript(`(() => {
+        const rect = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();
+        return { x: Math.round(rect.x + rect.width / 2), y: Math.round(rect.y + rect.height / 2) };
+      })()`);
+      addedPhone.webContents.sendInputEvent({ type: 'mouseMove', ...point });
+      addedPhone.webContents.sendInputEvent({ type: 'mouseDown', ...point, button: 'left', clickCount: 1 });
+      addedPhone.webContents.sendInputEvent({ type: 'mouseUp', ...point, button: 'left', clickCount: 1 });
+    }
+    assert.equal(await addedPhone.webContents.executeJavaScript(
+      "getComputedStyle(document.querySelector('.window-controls')).display"), 'flex');
+    await clickWindowControl('.window-controls .minimize');
+    await waitFor(() => addedPhone.isMinimized());
+    addedPhone.restore();
+    await waitFor(() => !addedPhone.isMinimized());
+    await clickWindowControl('.window-controls .close');
+    await waitFor(() => addedPhone.isDestroyed());
+    assert.ok(!phone.window.isDestroyed(), 'Closing one preview should not close other devices');
     console.log('Desktop presentation test passed.');
   } finally {
     server.closeAllConnections();

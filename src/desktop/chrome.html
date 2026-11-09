@@ -16,9 +16,53 @@
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    .device {
+    .window-controls {
       position: absolute;
       top: 0;
+      left: 0;
+      right: 0;
+      height: var(--controls-height);
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 0 7px;
+      border-radius: 9px;
+      background: rgba(31, 31, 34, .96);
+      color: #eee;
+      app-region: drag;
+      -webkit-app-region: drag;
+    }
+
+    .window-controls button {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      app-region: no-drag;
+      -webkit-app-region: no-drag;
+    }
+
+    .window-controls button::before {
+      display: block;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #ff5f57;
+      content: '';
+    }
+
+    .window-controls .minimize::before { background: #febc2e; }
+    .window-controls button:focus-visible { outline: 2px solid white; border-radius: 4px; }
+    .window-title { margin-left: 6px; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+    body.desktop-window .window-controls { display: none; }
+
+    .device {
+      position: absolute;
+      top: var(--controls-height);
       left: 0;
       width: calc(var(--width) * 1px);
       height: calc(var(--height) * 1px);
@@ -230,6 +274,11 @@
   </style>
 </head>
 <body>
+  <div class="window-controls" role="toolbar" aria-label="Window controls">
+    <button type="button" class="close" aria-label="Close preview" title="Close preview"></button>
+    <button type="button" class="minimize" aria-label="Minimize preview" title="Minimize preview"></button>
+    <span class="window-title"></span>
+  </div>
   <div class="device" id="device">
     <div class="screen">
       <div class="status">
@@ -260,6 +309,12 @@
     const device = document.getElementById('device');
 
     device.classList.add(params.get('kind'));
+    document.body.classList.toggle('desktop-window', params.get('kind') === 'desktop');
+    document.documentElement.style.setProperty('--controls-height', params.get('controlsHeight') + 'px');
+    document.querySelector('.window-title').textContent = params.get('name');
+    for (const action of ['close', 'minimize']) {
+      document.querySelector(`.window-controls .${action}`).addEventListener('click', () => window.viewports.windowAction(action));
+    }
     if (params.get('id') === 'iphone-se') device.classList.add('se');
     device.style.setProperty('--width', params.get('width'));
     device.style.setProperty('--height', params.get('height'));

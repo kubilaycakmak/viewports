@@ -4,6 +4,8 @@ export const TEXT_SIZES = {
   'extra-large': { label: 'Extra Large', fontSize: 24, scale: 1.5 },
 };
 
+export const WINDOW_CONTROLS_HEIGHT = 34;
+
 export const DEFAULT_AREAS = { top: true, bottom: true };
 
 // Visual approximations in CSS pixels, not manufacturer measurements.

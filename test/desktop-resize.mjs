@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { app, BrowserWindow, Menu, screen } from 'electron';
-import { presentationFor } from '../src/desktop/presentation.js';
+import { presentationFor, WINDOW_CONTROLS_HEIGHT } from '../src/desktop/presentation.js';
 
 const device = { id: 'iphone-se', type: 'mobile', width: 375, height: 667 };
 const frame = presentationFor(device);
@@ -52,7 +52,7 @@ async function run() {
 
     for (const width of [250, frame.width, 550, 300]) {
       const height = Math.round(width * frame.height / frame.width);
-      window.setContentSize(width, height);
+      window.setContentSize(width, height + WINDOW_CONTROLS_HEIGHT);
       await waitFor(() => window.getContentSize()[0] === width);
       // Allow the resize event and compositor update to finish before capturing.
       await new Promise(resolve => setTimeout(resolve, 300));
