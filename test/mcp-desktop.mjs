@@ -33,6 +33,16 @@ try {
   const opened = await call('open_preview', { url, devices: ['iphone-se', 'desktop-hd'], textSize: 'large' });
   sessionId = opened.sessionId;
   assert.equal(opened.textSize, 'large');
+  assert.deepEqual(opened.areas, { top: true, bottom: true });
+  const hiddenTop = await call('set_device_areas', { sessionId, areas: { top: false, bottom: true } });
+  assert.deepEqual(hiddenTop.areas, { top: false, bottom: true });
+  assert.equal(hiddenTop.viewports[0].viewportHeight, 585);
+  const noAreas = await call('set_device_areas', { sessionId, areas: { top: false, bottom: false } });
+  assert.equal(noAreas.viewports[0].viewportHeight, 667);
+  const addedWithoutAreas = await call('add_device', { sessionId, device: 'ipad-mini' });
+  assert.equal(addedWithoutAreas.viewports[2].viewportHeight, 1024);
+  await call('remove_device', { sessionId, device: 'ipad-mini' });
+  await call('set_device_areas', { sessionId, areas: { top: true, bottom: true } });
   assert.deepEqual([opened.devices[0].viewportWidth, opened.devices[0].viewportHeight], [375, 559]);
   assert.equal((await call('set_text_size', { sessionId, textSize: 'extra-large' })).textSize, 'extra-large');
   assert.deepEqual(opened.devices.map(device => device.id), ['iphone-se', 'desktop-hd']);
@@ -53,6 +63,13 @@ try {
   assert.deepEqual((await call('remove_device', { sessionId, device: 'ipad-mini' })).devices, []);
   assert.deepEqual((await call('add_device', { sessionId, device: 'iphone-17' })).devices, ['iphone-17']);
   await call('remove_device', { sessionId, device: 'iphone-17' });
+
+  const plain = await call('open_preview', {
+    url, devices: ['iphone-se'], areas: { top: false, bottom: false },
+  });
+  assert.deepEqual(plain.areas, { top: false, bottom: false });
+  assert.equal(plain.devices[0].viewportHeight, 667);
+  await call('remove_device', { sessionId: plain.sessionId, device: 'iphone-se' });
   console.log('MCP desktop session test passed.');
 } finally {
   await client.close();

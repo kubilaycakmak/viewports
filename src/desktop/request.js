@@ -1,11 +1,11 @@
 import { ALL_DEVICES } from '../public/devices.js';
-import { TEXT_SIZES } from './presentation.js';
+import { DEFAULT_AREAS, TEXT_SIZES } from './presentation.js';
 
 export const DEFAULT_DEVICES = ['iphone-17', 'ipad-pro-11', 'desktop-hd'];
 export const DEVICE_IDS = ALL_DEVICES.map(({ id }) => id);
 export const STARTUP_MESSAGE = 'viewports:';
 
-export function createPreviewRequest(url, deviceIds = DEFAULT_DEVICES, textSize = 'default') {
+export function createPreviewRequest(url, deviceIds = DEFAULT_DEVICES, textSize = 'default', areas = DEFAULT_AREAS) {
   let target;
   try {
     target = new URL(url);
@@ -19,6 +19,9 @@ export function createPreviewRequest(url, deviceIds = DEFAULT_DEVICES, textSize 
   if (!Object.hasOwn(TEXT_SIZES, textSize)) {
     throw new Error('Text size must be default, large, or extra-large.');
   }
+  if (typeof areas?.top !== 'boolean' || typeof areas?.bottom !== 'boolean') {
+    throw new Error('Device areas must specify top and bottom as true or false.');
+  }
   if (deviceIds.length < 1) {
     throw new Error('Choose at least one device.');
   }
@@ -31,5 +34,5 @@ export function createPreviewRequest(url, deviceIds = DEFAULT_DEVICES, textSize 
     if (!device) throw new Error(`Unknown device "${id}". Run viewports --help to list presets.`);
     return device;
   });
-  return { url: target.href, devices, textSize };
+  return { url: target.href, devices, textSize, areas: { top: areas.top, bottom: areas.bottom } };
 }

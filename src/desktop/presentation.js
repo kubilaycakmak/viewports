@@ -4,7 +4,9 @@ export const TEXT_SIZES = {
   'extra-large': { label: 'Extra Large', fontSize: 24, scale: 1.5 },
 };
 
-export function presentationFor(device) {
+export const DEFAULT_AREAS = { top: true, bottom: true };
+
+export function presentationFor(device, areas = DEFAULT_AREAS) {
   if (device.type !== 'mobile' && device.type !== 'tablet') {
     return {
       width: device.width,
@@ -38,6 +40,9 @@ export function presentationFor(device) {
     kind = 'ios';
     pixelRatio = device.id === 'iphone-se' ? 2 : 3;
   }
+
+  if (!areas.top) top = 0;
+  if (!areas.bottom) bottom = 0;
 
   return {
     width: device.width + bezel * 2,

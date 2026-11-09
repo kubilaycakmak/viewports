@@ -21,18 +21,20 @@ npm start -- http://localhost:3000
 
 The first desktop launch downloads Electron. If the official download has a temporary network error, Viewports retries and then uses the mirror documented by Electron. The Electron installer verifies the archive against the checksums bundled with the npm package. Custom Electron mirror settings are respected.
 
-In an interactive terminal, select the devices and text size with the keyboard. iPhone 17, iPad Pro 11, and Desktop HD are preselected. Pass `--devices` to open selected presets directly. Resize a window by dragging its edge. Use the **Devices** and **Text Size** menus to update the open session. The selected text size applies to every device in that session.
+In an interactive terminal, select devices, the top and bottom areas, and text size with the keyboard. iPhone 17, iPad Pro 11, and Desktop HD are preselected. The menu stays open so you can add or remove devices and change settings. Select **Exit menu** to leave the previews open.
+
+Pass `--devices` to open selected presets directly. Resize a window by dragging its edge. The **Devices**, **Device Areas**, and **Text Size** application menus also update the open session. Area and text settings apply to every device in that session.
 
 Phones and tablets show an illustrative browser frame. The address and navigation icons are visual placeholders. The page viewport accounts for the displayed browser and status areas. These areas are fixed approximations; actual device UI changes with browser, OS, scrolling, and display settings. The page runs in Chromium with a representative mobile user agent and touch emulation. iPhone and iPad presets use reference pixel ratios; Android pixel ratios follow the host display.
 
 Text size changes the browser's default font size to 16, 20, or 24 CSS pixels and sets Chromium's OS text scale. Relative text can grow, while text explicitly sized in CSS pixels may remain unchanged. This approximates accessibility settings and does not reproduce every device's system text behavior.
 
 ```bash
-npx --yes --package='git+https://github.com/kubilaycakmak/viewports.git#dev' viewports http://localhost:3000/checkout --devices iphone-17,desktop-hd --text-size large
+npx --yes --package='git+https://github.com/kubilaycakmak/viewports.git#dev' viewports http://localhost:3000/checkout --devices iphone-17,desktop-hd --text-size large --areas top
 npx --yes --package='git+https://github.com/kubilaycakmak/viewports.git#dev' viewports --help
 ```
 
-Each CLI launch opens a new preview session. Manage its open devices with the Devices menu.
+Use `--areas top,bottom` (the default), `--areas top`, `--areas bottom`, or `--areas none` to control the device areas in direct mode. Each CLI launch opens a new preview session.
 
 If you omit the URL, Viewports looks for a dev script in the current project and checks that the inferred URL responds. These presets target responsive breakpoints in Chromium.
 
@@ -51,7 +53,7 @@ Configure your local MCP client to launch the development branch through npx:
 }
 ```
 
-Ask the agent to “Open checkout at http://localhost:3000/checkout on an iPhone and desktop.” The `open_preview` tool opens the desktop windows and returns a session ID. The agent can use `add_device`, `remove_device`, `list_devices`, and `set_text_size` with that ID to manage the open session. Device selections made through the desktop menu are reflected in `list_devices`. Tool results include each device’s screen and page viewport dimensions.
+Ask the agent to “Open checkout at http://localhost:3000/checkout on an iPhone and desktop.” The `open_preview` tool opens the desktop windows and returns a session ID. The agent can use `add_device`, `remove_device`, `list_devices`, `set_device_areas`, and `set_text_size` with that ID to manage the open session. Device selections made through the desktop menu are reflected in `list_devices`. Tool results include each device’s screen and page viewport dimensions.
 
 Run the MCP server on the computer with the graphical desktop you want to use. Session IDs belong to the active MCP connection. When the connection closes, open windows stay on the desktop and can be managed through the Devices menu. A new MCP connection can open a new preview session.
 

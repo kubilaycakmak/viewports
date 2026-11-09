@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { ALL_DEVICES, DEVICE_GROUPS } from '../public/devices.js';
 import { createPreviewRequest, STARTUP_MESSAGE } from './request.js';
-import { mobileUserAgent, presentationFor, TEXT_SIZES } from './presentation.js';
+import { DEFAULT_AREAS, mobileUserAgent, presentationFor, TEXT_SIZES } from './presentation.js';
 
 const PADDING = 20;
 const GAP = 12;
@@ -14,6 +14,8 @@ const previews = new WeakMap();
 const chromePath = fileURLToPath(new URL('./chrome.html', import.meta.url));
 let targetUrl;
 let currentTextSize = 'default';
+let currentAreas = { ...DEFAULT_AREAS };
+let areaUpdates = Promise.resolve();
 let textSizeUpdates = Promise.resolve();
 let controlled = process.env.VIEWPORTS_CONTROL === 'stdio';
 
@@ -44,6 +46,25 @@ function updateMenu() {
         click: () => setTextSize(id).catch(error => dialog.showErrorBox('Could not change text size', error.message)),
       })),
     },
+    {
+      label: 'Device Areas',
+      submenu: [
+        {
+          label: 'Top Area',
+          type: 'checkbox',
+          checked: currentAreas.top,
+          click: item => setAreas({ ...currentAreas, top: item.checked })
+            .catch(error => dialog.showErrorBox('Could not change device areas', error.message)),
+        },
+        {
+          label: 'Bottom Area',
+          type: 'checkbox',
+          checked: currentAreas.bottom,
+          click: item => setAreas({ ...currentAreas, bottom: item.checked })
+            .catch(error => dialog.showErrorBox('Could not change device areas', error.message)),
+        },
+      ],
+    },
     { role: 'viewMenu' },
     { role: 'windowMenu' },
   );
@@ -68,7 +89,7 @@ function addDevice(device) {
 
   const operation = Promise.resolve().then(async () => {
     const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-    const frame = presentationFor(device);
+    const frame = presentationFor(device, currentAreas);
     const scale = Math.min(1, (workArea.width - 2 * PADDING) / frame.width,
       (workArea.height - 2 * PADDING - TITLE_BAR_SPACE) / frame.height);
     const width = Math.ceil(frame.width * scale);
@@ -142,6 +163,37 @@ function setTextSize(textSize) {
   return operation;
 }
 
+function setAreas(areas) {
+  if (typeof areas?.top !== 'boolean' || typeof areas?.bottom !== 'boolean') {
+    return Promise.reject(new Error('Device areas must specify top and bottom as true or false.'));
+  }
+  const operation = areaUpdates.then(async () => {
+    const previous = currentAreas;
+    currentAreas = { top: areas.top, bottom: areas.bottom };
+    const applyToOpenWindows = async value => {
+      await Promise.all([...windows.entries()].map(async ([id, window]) => {
+        const preview = previews.get(window);
+        const device = ALL_DEVICES.find(item => item.id === id);
+        if (!window.isDestroyed() && preview?.contents.debugger.isAttached()) {
+          preview.frame = presentationFor(device, value);
+          await scheduleMetrics(window, device);
+        }
+      }));
+    };
+    try {
+      await applyToOpenWindows(currentAreas);
+    } catch (error) {
+      currentAreas = previous;
+      await applyToOpenWindows(previous).catch(() => {});
+      throw error;
+    } finally {
+      updateMenu();
+    }
+  });
+  areaUpdates = operation.catch(() => {});
+  return operation;
+}
+
 function startControl() {
   const input = createInterface({ input: process.stdin });
   let queue = Promise.resolve();
@@ -152,6 +204,8 @@ function startControl() {
         message = JSON.parse(line);
         if (message.action === 'text-size') {
           await setTextSize(message.value);
+        } else if (message.action === 'areas') {
+          await setAreas(message.value);
         } else if (message.action !== 'status') {
           const device = ALL_DEVICES.find(item => item.id === message.device);
           if (!device || !['add', 'remove'].includes(message.action)) {
@@ -159,7 +213,7 @@ function startControl() {
           }
           await (message.action === 'add' ? addDevice(device) : removeDevice(device));
         }
-        report({ id: message.id, devices: [...windows.keys()], textSize: currentTextSize });
+        report({ id: message.id, devices: [...windows.keys()], textSize: currentTextSize, areas: currentAreas });
       } catch (error) {
         report({ id: message?.id, error: error.message });
       }
@@ -187,7 +241,14 @@ async function applyMetrics(window, device) {
       height: Math.max(1, Math.round(frame.viewportHeight * scale)),
     });
     await window.webContents.executeJavaScript(
-      `document.getElementById('device').style.setProperty('--scale', ${JSON.stringify(scale)})`,
+      `(() => {
+        const element = document.getElementById('device');
+        element.style.setProperty('--scale', ${JSON.stringify(scale)});
+        element.style.setProperty('--status-height', '${frame.top}px');
+        element.style.setProperty('--bottom', '${frame.bottom}px');
+        element.classList.toggle('hide-top', ${frame.top === 0});
+        element.classList.toggle('hide-bottom', ${frame.bottom === 0});
+      })()`,
     );
   }
 
@@ -203,29 +264,32 @@ async function applyMetrics(window, device) {
   });
 }
 
-function updateScale(window, device) {
-  let updating = false;
-  let pending = false;
+function scheduleMetrics(window, device) {
+  const preview = previews.get(window);
+  preview.pendingMetrics = true;
+  if (preview.metricsUpdate) return preview.metricsUpdate;
 
-  window.on('resize', async () => {
-    pending = true;
-    if (updating) return;
-    updating = true;
-    try {
-      while (pending && !window.isDestroyed() && previews.get(window).contents.debugger.isAttached()) {
-        pending = false;
-        await applyMetrics(window, device);
-      }
-    } catch {
-      // The window or its debugging session may close during a resize.
-    } finally {
-      updating = false;
+  preview.metricsUpdate = (async () => {
+    while (preview.pendingMetrics && !window.isDestroyed() && preview.contents.debugger.isAttached()) {
+      preview.pendingMetrics = false;
+      await applyMetrics(window, device);
     }
+  })().finally(() => {
+    preview.metricsUpdate = null;
+  });
+  return preview.metricsUpdate;
+}
+
+function updateScale(window, device) {
+  window.on('resize', () => {
+    scheduleMetrics(window, device).catch(() => {
+      // The window or its debugging session may close during a resize.
+    });
   });
 }
 
 async function openWindow(device, url, bounds) {
-  const frame = presentationFor(device);
+  const frame = presentationFor(device, currentAreas);
   const window = new BrowserWindow({
     ...bounds,
     title: device.name,
@@ -279,7 +343,8 @@ async function openWindow(device, url, bounds) {
     }
     await contents.loadURL('about:blank');
     contents.debugger.attach();
-    await applyMetrics(window, device);
+    previews.get(window).frame = presentationFor(device, currentAreas);
+    await scheduleMetrics(window, device);
     await applyTextSize(contents, currentTextSize);
     if (view) await contents.debugger.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: true });
     updateScale(window, device);
@@ -338,11 +403,19 @@ app.on('window-all-closed', () => {
 app.whenReady().then(async () => {
   const [url, ...arguments_] = process.argv.slice(2);
   const textSizeOption = arguments_.find(value => value.startsWith('--text-size='));
+  const areaOption = arguments_.find(value => value.startsWith('--areas='));
   const textSize = textSizeOption ? textSizeOption.slice('--text-size='.length) : 'default';
-  const deviceIds = arguments_.filter(value => !value.startsWith('--text-size='));
-  const request = createPreviewRequest(url, deviceIds, textSize);
+  const areaNames = areaOption ? areaOption.slice('--areas='.length).split(',') : ['top', 'bottom'];
+  if (areaNames.some(name => !['top', 'bottom', 'none'].includes(name))
+    || (areaNames.includes('none') && areaNames.length > 1)) {
+    throw new Error('Invalid device areas.');
+  }
+  const areas = { top: areaNames.includes('top'), bottom: areaNames.includes('bottom') };
+  const deviceIds = arguments_.filter(value => !value.startsWith('--text-size=') && !value.startsWith('--areas='));
+  const request = createPreviewRequest(url, deviceIds, textSize, areas);
   targetUrl = request.url;
   currentTextSize = request.textSize;
+  currentAreas = request.areas;
 
   const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   const layout = layoutDevices(request.devices, workArea);

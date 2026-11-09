@@ -64,13 +64,27 @@ async function run() {
       if (frame.bezel) assert.ok(state.touches > 0);
     }
 
+    const phone = all.find(item => item.window.getTitle() === 'iPhone 17');
+    async function toggleArea(name, checked, expectedHeight) {
+      const menu = Menu.getApplicationMenu().items.find(item => item.label === 'Device Areas');
+      menu.submenu.items.find(item => item.label === name).click({ checked });
+      await waitFor(async () => (await phone.contents.executeJavaScript('innerHeight')) === expectedHeight);
+    }
+    await toggleArea('Top Area', false, 792);
+    await toggleArea('Bottom Area', false, 874);
+    assert.deepEqual(await phone.window.webContents.executeJavaScript(`[
+      document.getElementById('device').classList.contains('hide-top'),
+      document.getElementById('device').classList.contains('hide-bottom')
+    ]`), [true, true]);
+    await toggleArea('Top Area', true, 820);
+    await toggleArea('Bottom Area', true, 738);
+
     const menu = Menu.getApplicationMenu().items.find(item => item.label === 'Text Size');
     menu.submenu.items.find(item => item.label.startsWith('Extra Large')).click();
     await waitFor(async () => (await Promise.all(all.map(item => item.contents.executeJavaScript(
       "getComputedStyle(document.getElementById('relative')).fontSize",
     )))).every(size => size === '24px'));
 
-    const phone = all.find(item => item.window.getTitle() === 'iPhone 17');
     await phone.contents.loadURL(url + '?navigation=1');
     assert.deepEqual(await phone.contents.executeJavaScript(`[
       innerWidth, innerHeight,

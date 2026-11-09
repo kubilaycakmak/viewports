@@ -3,12 +3,13 @@ import { createRequire } from 'node:module';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { ensureElectron } from './install-electron.js';
+import { DEFAULT_AREAS } from './presentation.js';
 import { STARTUP_MESSAGE } from './request.js';
 
 const electronCli = createRequire(import.meta.url).resolve('electron/cli.js');
 const desktopEntry = fileURLToPath(new URL('./main.js', import.meta.url));
 
-export async function launchDesktop({ url, devices, textSize = 'default' }, { managed = false } = {}) {
+export async function launchDesktop({ url, devices, textSize = 'default', areas = DEFAULT_AREAS }, { managed = false } = {}) {
   await ensureElectron();
 
   const env = { ...process.env };
@@ -17,7 +18,11 @@ export async function launchDesktop({ url, devices, textSize = 'default' }, { ma
   else delete env.VIEWPORTS_CONTROL;
 
   return new Promise((resolve, reject) => {
-    const args = [electronCli, desktopEntry, url, ...devices.map(({ id }) => id), `--text-size=${textSize}`];
+    const areaNames = ['top', 'bottom'].filter(name => areas[name]);
+    const args = [
+      electronCli, desktopEntry, url, ...devices.map(({ id }) => id),
+      `--text-size=${textSize}`, `--areas=${areaNames.join(',') || 'none'}`,
+    ];
     const child = spawn(process.execPath, args, {
       detached: true,
       stdio: [managed ? 'pipe' : 'ignore', 'pipe', 'pipe'],
@@ -59,6 +64,7 @@ export async function launchDesktop({ url, devices, textSize = 'default' }, { ma
           url,
           devices,
           textSize,
+          areas,
           control: {
             disconnect,
             request(action, device, value) {
@@ -85,7 +91,7 @@ export async function launchDesktop({ url, devices, textSize = 'default' }, { ma
         });
       } else {
         disconnect();
-        resolve({ url, devices, textSize });
+        resolve({ url, devices, textSize, areas });
       }
     }
 

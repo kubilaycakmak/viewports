@@ -20,10 +20,12 @@ export async function startMcp(version) {
         .describe('Device preset IDs. Defaults to iPhone 17, iPad Pro 11, and Desktop HD.'),
       textSize: z.enum(Object.keys(TEXT_SIZES)).optional()
         .describe('Browser default text size. Defaults to default.'),
+      areas: z.object({ top: z.boolean(), bottom: z.boolean() }).optional()
+        .describe('Show the top and bottom device areas. Both default to true.'),
     },
-  }, async ({ url, devices, textSize }) => {
+  }, async ({ url, devices, textSize, areas }) => {
     try {
-      const request = createPreviewRequest(url, devices, textSize);
+      const request = createPreviewRequest(url, devices, textSize, areas);
       const { launchDesktop } = await import('./desktop/launch.js');
       const result = await launchDesktop(request, { managed: true });
       if (clientClosed) {
@@ -35,8 +37,9 @@ export async function startMcp(version) {
       const value = {
         sessionId,
         url: result.url,
-        devices: result.devices.map(withViewport),
+        devices: result.devices.map(device => withViewport(device, result.areas)),
         textSize: result.textSize,
+        areas: result.areas,
       };
       const names = result.devices.map(({ name }) => name).join(', ');
       return {
@@ -56,8 +59,8 @@ export async function startMcp(version) {
     device: z.enum(DEVICE_IDS).describe('Device preset ID.'),
   };
 
-  function withViewport(device) {
-    const presentation = presentationFor(device);
+  function withViewport(device, areas) {
+    const presentation = presentationFor(device, areas);
     return { ...device, viewportWidth: presentation.viewportWidth, viewportHeight: presentation.viewportHeight };
   }
 
@@ -69,8 +72,9 @@ export async function startMcp(version) {
       sessionId,
       url: session.url,
       devices: result.devices,
-      viewports: result.devices.map(id => withViewport(ALL_DEVICES.find(device => device.id === id))),
+      viewports: result.devices.map(id => withViewport(ALL_DEVICES.find(device => device.id === id), result.areas)),
       textSize: result.textSize,
+      areas: result.areas,
     };
   }
 
@@ -121,6 +125,21 @@ export async function startMcp(version) {
   }, async ({ sessionId, textSize }) => {
     try {
       return response(await updateSession(sessionId, 'text-size', undefined, textSize));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  server.registerTool('set_device_areas', {
+    title: 'Change device areas',
+    description: 'Show or hide the top and bottom device areas in a preview session.',
+    inputSchema: {
+      ...sessionSchema,
+      areas: z.object({ top: z.boolean(), bottom: z.boolean() }),
+    },
+  }, async ({ sessionId, areas }) => {
+    try {
+      return response(await updateSession(sessionId, 'areas', undefined, areas));
     } catch (error) {
       return errorResponse(error);
     }
