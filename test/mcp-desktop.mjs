@@ -72,6 +72,20 @@ try {
   assert.deepEqual((await call('add_device', { sessionId, device: 'iphone-17' })).devices, ['iphone-17']);
   await call('remove_device', { sessionId, device: 'iphone-17' });
 
+  const foldables = await call('open_preview', {
+    url, devices: ['iphone-duo-folded', 'iphone-duo-unfolded', 'galaxy-z-fold8-unfolded'],
+  });
+  assert.deepEqual(foldables.devices.map(device => [device.viewportWidth, device.viewportHeight]),
+    [[382, 580], [669, 867], [816, 512]]);
+  const foldablesHidden = await call('set_device_areas', {
+    sessionId: foldables.sessionId, areas: { top: false, bottom: false },
+  });
+  assert.deepEqual(foldablesHidden.viewports.map(device => [device.viewportWidth, device.viewportHeight]),
+    [[466, 678], [669, 951], [816, 616]]);
+  for (const device of foldablesHidden.devices) {
+    await call('remove_device', { sessionId: foldables.sessionId, device });
+  }
+
   const plain = await call('open_preview', {
     url, devices: ['iphone-se'], areas: { top: false, bottom: false },
   });

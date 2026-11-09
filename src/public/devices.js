@@ -20,6 +20,26 @@ export const DEVICE_GROUPS = [
     ],
   },
   {
+    label: 'Foldables',
+    devices: [
+      // The Duo presets reproduce Safari 27.1's default portrait page widths.
+      { id: 'iphone-duo-folded',      name: 'iPhone Duo (Folded)',          width: 466, height: 678, type: 'mobile' },
+      { id: 'iphone-duo-unfolded',    name: 'iPhone Duo (Unfolded)',        width: 669, height: 951, type: 'mobile' },
+      // Android logical screen sizes are estimates and vary with display zoom.
+      { id: 'galaxy-z-fold8-folded',  name: 'Galaxy Z Fold8 (Folded)',      width: 416, height: 657, type: 'mobile' },
+      { id: 'galaxy-z-fold8-unfolded',name: 'Galaxy Z Fold8 (Unfolded)',    width: 816, height: 616, type: 'mobile' },
+      { id: 'galaxy-z-fold8-ultra-folded', name: 'Galaxy Z Fold8 Ultra (Folded)', width: 412, height: 960, type: 'mobile' },
+      { id: 'galaxy-z-fold8-ultra-unfolded', name: 'Galaxy Z Fold8 Ultra (Unfolded)', width: 752, height: 835, type: 'mobile' },
+      { id: 'galaxy-z-flip8',         name: 'Galaxy Z Flip8 (Unfolded)',    width: 360, height: 840, type: 'mobile' },
+      { id: 'galaxy-z-fold7-folded',  name: 'Galaxy Z Fold7 (Folded)',      width: 412, height: 960, type: 'mobile' },
+      { id: 'galaxy-z-fold7-unfolded',name: 'Galaxy Z Fold7 (Unfolded)',    width: 750, height: 832, type: 'mobile' },
+      { id: 'pixel-11-pro-fold-folded', name: 'Pixel 11 Pro Fold (Folded)', width: 412, height: 892, type: 'mobile' },
+      { id: 'pixel-11-pro-fold-unfolded', name: 'Pixel 11 Pro Fold (Unfolded)', width: 791, height: 820, type: 'mobile' },
+      { id: 'pixel-10-pro-fold-folded', name: 'Pixel 10 Pro Fold (Folded)', width: 412, height: 901, type: 'mobile' },
+      { id: 'pixel-10-pro-fold-unfolded', name: 'Pixel 10 Pro Fold (Unfolded)', width: 791, height: 820, type: 'mobile' },
+    ],
+  },
+  {
     label: 'Tablet',
     devices: [
       { id: 'ipad-mini',       name: 'iPad Mini',       width: 768,  height: 1024, type: 'tablet' },

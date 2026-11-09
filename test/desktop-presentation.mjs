@@ -36,7 +36,7 @@ async function run() {
     server.listen(0, '127.0.0.1', resolve);
   });
   const url = `http://127.0.0.1:${server.address().port}/`;
-  const ids = ['iphone-17', 'galaxy-s26', 'ipad-mini', 'desktop-hd'];
+  const ids = ['iphone-17', 'galaxy-s26', 'ipad-mini', 'desktop-hd', 'iphone-duo-folded', 'iphone-duo-unfolded'];
   process.argv = [process.argv[0], process.argv[1], url, ...ids, '--text-size=large'];
   await import('../src/desktop/main.js');
 
@@ -75,13 +75,19 @@ async function run() {
       assert.deepEqual([state.screenWidth, state.screenHeight], [device.width, device.height]);
       assert.deepEqual([state.relative, state.fixed, state.code], ['20px', '16px', '16px']);
       if (frame.pixelRatio) assert.equal(state.ratio, frame.pixelRatio);
-      if (frame.kind === 'ios') assert.match(state.userAgent, /iPhone/);
+      if (frame.kind === 'ios' || frame.kind === 'ios-inner') assert.match(state.userAgent, /iPhone/);
       if (frame.kind === 'android') assert.match(state.userAgent, /Android/);
       if (frame.kind === 'tablet') assert.match(state.userAgent, /iPad/);
       if (frame.bezel) assert.ok(state.touches > 0);
     }
 
     const phone = all.find(item => item.window.getTitle() === 'iPhone 17');
+    const duoFolded = all.find(item => item.window.getTitle() === 'iPhone Duo (Folded)');
+    const duoOpen = all.find(item => item.window.getTitle() === 'iPhone Duo (Unfolded)');
+    assert.deepEqual(await duoFolded.contents.executeJavaScript('[innerWidth, innerHeight]'), [382, 580]);
+    assert.deepEqual(await duoOpen.contents.executeJavaScript('[innerWidth, innerHeight]'), [669, 867]);
+    assert.equal(await duoOpen.window.webContents.executeJavaScript(
+      "getComputedStyle(document.querySelector('.top-address')).display"), 'flex');
     const desktop = all.find(item => item.window.getTitle() === 'Desktop HD');
     if (process.platform === 'darwin') {
       const capture = await phone.window.capturePage();
@@ -103,6 +109,7 @@ async function run() {
     assert.equal(await desktop.window.webContents.executeJavaScript(
       "getComputedStyle(document.querySelector('.top-address')).display"), 'none');
     await toggleArea('Bottom Area', false, 874);
+    await waitFor(async () => (await duoFolded.contents.executeJavaScript('innerWidth')) === 466);
     assert.deepEqual(await phone.window.webContents.executeJavaScript(`[
       document.getElementById('device').classList.contains('hide-top'),
       document.getElementById('device').classList.contains('hide-bottom')

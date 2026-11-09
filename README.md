@@ -4,16 +4,16 @@
 
 Open the same site in separate, live desktop windows at phone, tablet, and desktop sizes. Each window can move independently and keeps its preset viewport dimensions when scaled to fit the display.
 
-This is the desktop prototype on the `dev` branch. Try it with Node.js 22.12 or newer and a running dev server.
+Run with Node.js 22.12 or newer and a running dev server:
 
 ```bash
-npx --yes --package='git+https://github.com/kubilaycakmak/viewports.git#dev' viewports http://localhost:3000
+npx @kubilaycakmak/viewports http://localhost:3000
 ```
 
 To run from a checkout:
 
 ```bash
-git clone --branch dev https://github.com/kubilaycakmak/viewports.git
+git clone https://github.com/kubilaycakmak/viewports.git
 cd viewports
 npm ci
 npm start -- http://localhost:3000
@@ -30,8 +30,8 @@ Phones and tablets have close and minimize controls above an illustrative browse
 Text size changes the browser's default font size to 16, 20, or 24 CSS pixels and sets Chromium's OS text scale. Relative text can grow, while text explicitly sized in CSS pixels may remain unchanged. This approximates accessibility settings and does not reproduce every device's system text behavior.
 
 ```bash
-npx --yes --package='git+https://github.com/kubilaycakmak/viewports.git#dev' viewports http://localhost:3000/checkout --devices iphone-17,desktop-hd --text-size large --areas top
-npx --yes --package='git+https://github.com/kubilaycakmak/viewports.git#dev' viewports --help
+npx @kubilaycakmak/viewports http://localhost:3000/checkout --devices iphone-17,desktop-hd --text-size large --areas top
+npx @kubilaycakmak/viewports --help
 ```
 
 Use `--areas top,bottom` (the default), `--areas top`, `--areas bottom`, or `--areas none` to control the device areas in direct mode. Each CLI launch opens a new preview session.
@@ -40,14 +40,14 @@ If you omit the URL, Viewports looks for a dev script in the current project and
 
 ## MCP
 
-Configure your local MCP client to launch the development branch through npx:
+Configure your local MCP client to launch Viewports through npx:
 
 ```json
 {
   "mcpServers": {
     "viewports": {
       "command": "npx",
-      "args": ["--yes", "--package=git+https://github.com/kubilaycakmak/viewports.git#dev", "viewports", "mcp"]
+      "args": ["--yes", "--package=@kubilaycakmak/viewports", "viewports", "mcp"]
     }
   }
 }
@@ -80,7 +80,7 @@ Run `npm start -- web http://localhost:3000` to open the original canvas in your
 
 ## 📱 Device Presets
 
-The listed sizes represent the device screen in CSS pixels. The page viewport is shorter when browser controls are shown.
+The listed sizes represent the simulated device screen in CSS pixels. Browser controls reduce the page viewport. Foldable open and closed states are separate presets; they do not simulate the hinge, posture APIs, or switching screens automatically. iPhone Duo presets use [WebKit's Safari 27.1 portrait viewport measurements](https://webkit.org/blog/18486/webkit-features-for-safari-27-1/): 382 × 580 folded and 669 × 867 unfolded with both device areas enabled. The unfolded screen dimensions are an approximation based on the page viewport and display aspect ratio. Other foldable CSS sizes are estimates based on device dimensions and typical scaling; display zoom and browser UI can change actual sizes. Validate on a real device or platform simulator for device-specific behavior.
 
 | Category | Device | Width | Height |
 |----------|--------|------:|-------:|
@@ -95,6 +95,19 @@ The listed sizes represent the device screen in CSS pixels. The page viewport is
 | Mobile | Pixel 10 Pro | 412 | 892 |
 | Mobile | iPhone SE | 375 | 667 |
 | Mobile | iPhone 14 | 390 | 844 |
+| Foldable | iPhone Duo (Folded) | 466 | 678 |
+| Foldable | iPhone Duo (Unfolded) | 669 | 951 |
+| Foldable | Galaxy Z Fold8 (Folded) | 416 | 657 |
+| Foldable | Galaxy Z Fold8 (Unfolded) | 816 | 616 |
+| Foldable | Galaxy Z Fold8 Ultra (Folded) | 412 | 960 |
+| Foldable | Galaxy Z Fold8 Ultra (Unfolded) | 752 | 835 |
+| Foldable | Galaxy Z Flip8 (Unfolded) | 360 | 840 |
+| Foldable | Galaxy Z Fold7 (Folded) | 412 | 960 |
+| Foldable | Galaxy Z Fold7 (Unfolded) | 750 | 832 |
+| Foldable | Pixel 11 Pro Fold (Folded) | 412 | 892 |
+| Foldable | Pixel 11 Pro Fold (Unfolded) | 791 | 820 |
+| Foldable | Pixel 10 Pro Fold (Folded) | 412 | 901 |
+| Foldable | Pixel 10 Pro Fold (Unfolded) | 791 | 820 |
 | Tablet | iPad Mini | 768 | 1024 |
 | Tablet | iPad Air 11" | 820 | 1180 |
 | Tablet | iPad Pro 11" | 834 | 1194 |
@@ -181,6 +194,11 @@ Released under the [MIT License](./LICENSE.md).
 ---
 
 ## 📋 Changelog
+
+### v4.0.0
+- Desktop preview windows are now the default CLI experience. Use `viewports web` for the original browser canvas.
+- Add an interactive CLI, MCP server, device frame controls, text-size settings, and foldable presets.
+- Requires Node.js 22.12 or newer.
 
 ### v3.0.1
 - 🐛 Fixed proxy not syncing cached URL on fresh server start (no CLI URL arg)

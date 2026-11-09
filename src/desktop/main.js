@@ -269,7 +269,7 @@ async function applyMetrics(window, device) {
   if (view) {
     const x = Math.round(frame.bezel * scale);
     const y = controlsHeight + Math.round(frame.bezel * scale);
-    const screenWidth = Math.max(1, Math.round(frame.viewportWidth * scale));
+    const screenWidth = Math.max(1, Math.round(device.width * scale));
     const screenHeight = Math.max(1, Math.round(device.height * scale));
     const top = Math.round(frame.top * scale);
     screenView.setBounds({ x, y, width: screenWidth, height: screenHeight });
@@ -277,7 +277,7 @@ async function applyMetrics(window, device) {
     view.setBounds({
       x: 0,
       y: top,
-      width: screenWidth,
+      width: Math.max(1, Math.round(frame.viewportWidth * scale)),
       height: Math.max(1, Math.round(frame.viewportHeight * scale)),
     });
     await window.webContents.executeJavaScript(

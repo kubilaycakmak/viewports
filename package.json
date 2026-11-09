@@ -1,6 +1,6 @@
 {
   "name": "@kubilaycakmak/viewports",
-  "version": "3.0.1",
+  "version": "4.0.0",
   "description": "Live responsive previews in desktop windows, with a CLI and MCP server",
   "type": "module",
   "bin": {
@@ -18,7 +18,7 @@
     "@inquirer/checkbox": "^4.3.2",
     "@inquirer/select": "^4.4.2",
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "electron": "^45.2.3",
+    "electron": "45.2.3",
     "proper-lockfile": "^4.1.2",
     "zod": "^4.6.7"
   },
