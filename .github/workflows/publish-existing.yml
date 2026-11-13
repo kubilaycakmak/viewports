@@ -10,14 +10,15 @@ jobs:
     if: github.event.head_commit.message == 'Publish existing npm package 4.0.1 to GitHub Packages'
     runs-on: ubuntu-latest
     steps:
+      - name: Download published npmjs artifact
+        run: npm pack @kubilaycakmak/viewports@4.0.1 --registry=https://registry.npmjs.org --ignore-scripts
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@kubilaycakmak'
-      - name: Download published npmjs artifact
-        run: npm pack @kubilaycakmak/viewports@4.0.1 --registry=https://registry.npmjs.org --ignore-scripts
       - name: Publish same artifact to GitHub Packages
         run: npm publish kubilaycakmak-viewports-4.0.1.tgz --registry=https://npm.pkg.github.com --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
