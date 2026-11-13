@@ -1,5 +1,9 @@
 # ◈ viewports
 
+[![npm version](https://img.shields.io/npm/v/%40kubilaycakmak%2Fviewports)](https://www.npmjs.com/package/@kubilaycakmak/viewports)
+
+Contributing: see [CONTRIBUTING.md](CONTRIBUTING.md). Maintainers can find the repository map and release checklist in [the handoff](docs/MAINTAINER_HANDOFF.md).
+
 Preview the same website in independent device windows on your desktop. Test responsive layouts across phones, foldables, tablets, laptops, and desktop screens without leaving your development workflow.
 
 ![Viewports desktop previews showing an iPhone, an unfolded iPhone Duo, and a desktop window](https://raw.githubusercontent.com/kubilaycakmak/viewports/master/docs/desktop-preview.png)
