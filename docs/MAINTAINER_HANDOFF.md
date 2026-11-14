@@ -12,7 +12,9 @@
 
 Start substantial work with an issue, use a focused branch and PR, and record verification and compatibility impact in the PR. CI is defined in `.github/workflows/ci.yml`; it does not itself enforce branch protection. Configure required status checks and review rules in GitHub repository settings after confirming the workflow runs on the default branch.
 
-Before releasing, review the npm package contents (`npm pack --dry-run`), test on supported platforms, verify documentation and version, and review the final diff. A maintainer decides the version and publishes using the project's established npm credentials. CI does not publish packages.
+Before releasing, review the npm package contents (`npm pack --dry-run`), test on supported platforms, verify documentation and version, and review the final diff. A maintainer decides the version and publishes to npmjs.org using their npm account (`npm publish --access public`). Do not put npm credentials or one-time codes in repository files or chat.
+
+After npmjs.org reports the new version, create the matching `vX.Y.Z` tag and GitHub Release from the same commit. `.github/workflows/publish-github-package.yml` then publishes that version to GitHub Packages using the repository's `GITHUB_TOKEN`. Confirm both registries report the version; they are separate and do not sync automatically. If the GitHub Packages workflow fails, fix and rerun it before announcing the release.
 
 ## Current screenshot initiative
 

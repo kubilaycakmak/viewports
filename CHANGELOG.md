@@ -1,6 +1,6 @@
 # Changelog
 
-## 4.1.0 (unreleased)
+## 4.1.0 - 2026-11-13
 
 - Capture the visible viewport or a bounded full-page PNG for an open device from the desktop menu or the MCP `capture_screenshot` tool.
 - Fix Windows MCP session startup and control. Use one transparent preview toolbar on Windows instead of duplicated window controls.
