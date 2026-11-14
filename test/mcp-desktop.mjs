@@ -24,10 +24,12 @@ const transport = new StdioClientTransport({
 });
 transport.stderr.on('data', chunk => process.stderr.write(chunk));
 const client = new Client({ name: 'viewports-test', version: '1.0.0' });
+const testSessions = new Set();
 
 async function call(name, args) {
   const result = await client.callTool({ name, arguments: args });
   assert.notEqual(result.isError, true, JSON.stringify(result));
+  if (name === 'open_preview') testSessions.add(result.structuredContent.sessionId);
   return result.structuredContent;
 }
 
@@ -111,6 +113,15 @@ try {
   await call('remove_device', { sessionId: plain.sessionId, device: 'iphone-se' });
   console.log('MCP desktop session test passed.');
 } finally {
+  // MCP windows deliberately survive disconnects; close test-owned windows even after a failed assertion.
+  for (const id of testSessions) {
+    try {
+      const state = await call('list_devices', { sessionId: id });
+      for (const device of state.devices) await call('remove_device', { sessionId: id, device });
+    } catch (error) {
+      console.error(`Could not close test preview ${id}: ${error.message}`);
+    }
+  }
   await client.close();
   server.closeAllConnections();
   server.close();
