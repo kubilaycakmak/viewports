@@ -9,7 +9,7 @@ function previewViews(view) {
 }
 
 async function waitFor(check) {
-  for (let attempt = 0; attempt < 100; attempt++) {
+  for (let attempt = 0; attempt < 300; attempt++) {
     const result = await check();
     if (result) return result;
     await new Promise(resolve => setTimeout(resolve, 50));

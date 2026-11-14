@@ -15,6 +15,11 @@ await new Promise((resolve, reject) => {
 const transport = new StdioClientTransport({
   command: process.execPath,
   args: [fileURLToPath(new URL('../bin/viewports.js', import.meta.url)), 'mcp'],
+  // The MCP SDK intentionally filters its inherited environment, including DISPLAY on Linux.
+  ...(process.platform === 'linux' ? { env: Object.fromEntries(
+    ['DISPLAY', 'XAUTHORITY', 'WAYLAND_DISPLAY', 'XDG_RUNTIME_DIR']
+      .filter(name => process.env[name]).map(name => [name, process.env[name]]),
+  ) } : {}),
   stderr: 'pipe',
 });
 transport.stderr.on('data', chunk => process.stderr.write(chunk));

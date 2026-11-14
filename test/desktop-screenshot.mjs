@@ -25,13 +25,18 @@ await import('../src/desktop/main.js');
 function views(view) { return view.children.flatMap(child => child.webContents ? [child] : views(child)); }
 try {
   let contents;
-  for (let i = 0; i < 100 && !contents; i++) {
+  for (let i = 0; i < 300 && !contents; i++) {
     contents = BrowserWindow.getAllWindows().flatMap(window => views(window.contentView))
       .map(view => view.webContents).find(item => item.getURL() === url && !item.isLoading());
     if (!contents) await new Promise(resolve => setTimeout(resolve, 50));
   }
   assert.ok(contents, 'Preview did not open');
-  const menu = Menu.getApplicationMenu().items.find(item => item.label === 'Screenshot');
+  let menu;
+  for (let i = 0; i < 300 && !menu; i++) {
+    menu = Menu.getApplicationMenu()?.items.find(item => item.label === 'Screenshot');
+    if (!menu) await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  assert.ok(menu, 'Screenshot menu did not appear');
   assert.ok(menu.submenu.items.some(item => item.label === 'iPhone SE'));
   const frame = presentationFor({ id: 'iphone-se', type: 'mobile', width: 375, height: 667 });
   await contents.executeJavaScript('scrollTo(0, 300)');

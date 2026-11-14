@@ -60,6 +60,8 @@ Add Viewports to your local MCP client:
 
 Ask your agent to open a URL on the devices you want. `open_preview` creates the windows and returns a session ID. Use `add_device`, `remove_device`, `list_devices`, `set_device_areas`, `set_text_size`, and `navigate_preview` to manage that session. `capture_screenshot` returns a PNG image for an open device in `viewport` or `full-page` mode. Run the MCP server on the computer where you want the windows to appear. Windows stay open when the MCP connection ends.
 
+On Linux, MCP clients that filter environment variables must pass the desktop session's `DISPLAY` and, when applicable, `XAUTHORITY`, `WAYLAND_DISPLAY`, and `XDG_RUNTIME_DIR` to the server so Electron can connect to the display.
+
 Full-page capture scrolls the main document to trigger lazy loading, then restores its original position. It limits scrolling to 60 steps and images to 16 million pixels and 6 MB; an error is returned when a limit is exceeded. Content that loads slowly, nested scroll containers, animations, and fixed or sticky elements may not appear as expected. Captures include page content, not the simulated device frame. Avoid sharing screenshots containing sensitive information.
 
 ## Device presets
