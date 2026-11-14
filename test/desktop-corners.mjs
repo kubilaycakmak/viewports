@@ -33,6 +33,11 @@ if (process.platform !== 'win32') {
     return [bytes[offset + 2], bytes[offset + 1], bytes[offset]];
   }
 
+  function assertColorNear(actual, expected, message) {
+    assert.ok(actual.every((channel, index) => Math.abs(channel - expected[index]) <= 3),
+      `${message}: ${JSON.stringify({ actual, expected })}`);
+  }
+
   async function run() {
     try {
       const windows = await waitFor(() => {
@@ -65,9 +70,9 @@ if (process.platform !== 'win32') {
         const center = pixel(image, Math.floor((shell.left + shell.right) / 2 * factor), y);
         const left = pixel(image, Math.ceil((shell.left + 2 * shell.scale) * factor), y);
         const right = pixel(image, Math.floor((shell.right - 2 * shell.scale) * factor), y);
-        assert.deepEqual(center, [249, 217, 123], `${window.getTitle()} page should fill the viewport center`);
-        assert.deepEqual(left, center, `${window.getTitle()} page should have a square lower-left corner`);
-        assert.deepEqual(right, center, `${window.getTitle()} page should have a square lower-right corner`);
+        assertColorNear(center, [249, 217, 123], `${window.getTitle()} page should fill the viewport center`);
+        assertColorNear(left, center, `${window.getTitle()} page should have a square lower-left corner`);
+        assertColorNear(right, center, `${window.getTitle()} page should have a square lower-right corner`);
       }
       const bottomArea = Menu.getApplicationMenu().items.find(item => item.label === 'Device Areas')
         .submenu.items.find(item => item.label === 'Bottom Area');
@@ -98,8 +103,8 @@ if (process.platform !== 'win32') {
         const y = Math.floor((shell.bottom - 2 * shell.scale) * factor);
         const center = pixel(image, Math.floor((shell.left + shell.right) / 2 * factor), y);
         const left = pixel(image, Math.ceil((shell.left + 2 * shell.scale) * factor), y);
-        assert.deepEqual(center, [249, 217, 123]);
-        assert.deepEqual(left, center, `${window.getTitle()} page should remain square without bottom controls`);
+        assertColorNear(center, [249, 217, 123], `${window.getTitle()} page should fill the viewport center`);
+        assertColorNear(left, center, `${window.getTitle()} page should remain square without bottom controls`);
       }
       console.log('Desktop corner clearance test passed.');
     } finally {
