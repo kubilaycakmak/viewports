@@ -34,6 +34,7 @@ The first desktop launch downloads Electron. Viewports retries temporary downloa
 - Enter an address in any visible address bar to navigate all windows in the session.
 - Set the browser default text size to **Default**, **Large**, or **Extra Large**. Text explicitly sized in CSS pixels may remain unchanged.
 - Use the close and minimize controls above phone and tablet previews. The rounded device frames are illustrative.
+- Use the **Screenshot** application menu to save the visible viewport or the full page of an open device as a PNG.
 
 ```bash
 npx @kubilaycakmak/viewports@latest http://localhost:3000/checkout --devices iphone-17,desktop-hd --text-size large --areas top
@@ -57,7 +58,9 @@ Add Viewports to your local MCP client:
 }
 ```
 
-Ask your agent to open a URL on the devices you want. `open_preview` creates the windows and returns a session ID. Use `add_device`, `remove_device`, `list_devices`, `set_device_areas`, `set_text_size`, and `navigate_preview` to manage that session. Run the MCP server on the computer where you want the windows to appear. Windows stay open when the MCP connection ends.
+Ask your agent to open a URL on the devices you want. `open_preview` creates the windows and returns a session ID. Use `add_device`, `remove_device`, `list_devices`, `set_device_areas`, `set_text_size`, and `navigate_preview` to manage that session. `capture_screenshot` returns a PNG image for an open device in `viewport` or `full-page` mode. Run the MCP server on the computer where you want the windows to appear. Windows stay open when the MCP connection ends.
+
+Full-page capture scrolls the main document to trigger lazy loading, then restores its original position. It limits scrolling to 60 steps and images to 16 million pixels and 6 MB; an error is returned when a limit is exceeded. Content that loads slowly, nested scroll containers, animations, and fixed or sticky elements may not appear as expected. Captures include page content, not the simulated device frame. Avoid sharing screenshots containing sensitive information.
 
 ## Device presets
 

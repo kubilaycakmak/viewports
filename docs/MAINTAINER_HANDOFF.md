@@ -16,4 +16,4 @@ Before releasing, review the npm package contents (`npm pack --dry-run`), test o
 
 ## Current screenshot initiative
 
-See [device screenshot proposal](device-screenshots.md). Implement it in a separate issue and PR after the foundation is reviewed; keep existing canvas screenshots and MCP tools working. Record decisions and validation results in that PR so a later contributor can resume safely.
+See [device screenshot proposal](device-screenshots.md) and issue #1. Keep the screenshot work in a separate PR, preserving existing canvas screenshots and MCP tools. Record decisions and validation results in that PR so a later contributor can resume safely.

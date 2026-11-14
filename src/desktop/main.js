@@ -1,16 +1,19 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, screen, View, WebContentsView } from 'electron';
 import { createInterface } from 'node:readline';
 import { createConnection } from 'node:net';
+import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { ALL_DEVICES, DEVICE_GROUPS } from '../public/devices.js';
 import { createPreviewRequest, STARTUP_MESSAGE } from './request.js';
 import { DEFAULT_AREAS, mobileUserAgent, presentationFor, TEXT_SIZES, WINDOW_CONTROLS_HEIGHT } from './presentation.js';
+import { captureScreenshot } from './screenshot.js';
 
 const PADDING = 20;
 const GAP = 12;
 const TITLE_BAR_SPACE = 48;
 const windows = new Map();
 const opening = new Map();
+const capturing = new Set();
 const previews = new WeakMap();
 const chromePath = fileURLToPath(new URL('./chrome.html', import.meta.url));
 const preloadPath = fileURLToPath(new URL('./preload.cjs', import.meta.url));
@@ -38,6 +41,17 @@ function updateMenu() {
           enabled: !opening.has(device.id),
           click: () => toggleDevice(device),
         })),
+      })),
+    },
+    {
+      label: 'Screenshot',
+      submenu: [...windows.keys()].map(id => ({
+        label: ALL_DEVICES.find(device => device.id === id)?.name ?? id,
+        enabled: !capturing.has(id),
+        submenu: [
+          { label: 'Visible viewport…', click: () => saveScreenshot(id, 'viewport') },
+          { label: 'Full page…', click: () => saveScreenshot(id, 'full-page') },
+        ],
       })),
     },
     {
@@ -72,6 +86,37 @@ function updateMenu() {
     { role: 'windowMenu' },
   );
   Menu.setApplicationMenu(Menu.buildFromTemplate(menu));
+}
+
+async function captureDevice(id, mode) {
+  const window = windows.get(id);
+  const preview = window && previews.get(window);
+  if (!window || window.isDestroyed() || !preview) throw new Error('Device is not open.');
+  if (capturing.has(id)) throw new Error('A screenshot is already in progress for this device.');
+  capturing.add(id);
+  updateMenu();
+  try {
+    const data = await captureScreenshot(preview.contents, preview.frame, mode);
+    if (Buffer.byteLength(data, 'base64') > 6_000_000) throw new Error('Screenshot exceeds the output size limit.');
+    return data;
+  } finally {
+    capturing.delete(id);
+    updateMenu();
+  }
+}
+
+async function saveScreenshot(id, mode) {
+  try {
+    const result = await dialog.showSaveDialog(windows.get(id), {
+      title: 'Save screenshot', defaultPath: `viewports-${id}-${mode}.png`,
+      filters: [{ name: 'PNG image', extensions: ['png'] }],
+    });
+    if (result.canceled || !result.filePath) return;
+    const data = await captureDevice(id, mode);
+    await writeFile(result.filePath, Buffer.from(data, 'base64'));
+  } catch (error) {
+    dialog.showErrorBox('Could not save screenshot', error.message);
+  }
 }
 
 async function toggleDevice(device) {
@@ -244,7 +289,11 @@ async function startControl() {
       let message;
       try {
         message = JSON.parse(line);
-        if (message.action === 'text-size') {
+        if (message.action === 'screenshot') {
+          const data = await captureDevice(message.device, message.value);
+          report({ id: message.id, data });
+          return;
+        } else if (message.action === 'text-size') {
           await setTextSize(message.value);
         } else if (message.action === 'areas') {
           await setAreas(message.value);

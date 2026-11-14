@@ -89,6 +89,24 @@ export async function startMcp(version) {
     return { content: [{ type: 'text', text: error.message }], isError: true };
   }
 
+  server.registerTool('capture_screenshot', {
+    title: 'Capture a device screenshot',
+    description: 'Capture the current viewport or the full page of an open device as a PNG image.',
+    inputSchema: {
+      ...deviceSchema,
+      mode: z.enum(['viewport', 'full-page']).describe('Capture the visible viewport or the full page.'),
+    },
+  }, async ({ sessionId, device, mode }) => {
+    try {
+      const session = sessions.get(sessionId);
+      if (!session) throw new Error('Preview session was not found. Open a new preview.');
+      const result = await session.control.request('screenshot', device, mode);
+      return { content: [{ type: 'image', data: result.data, mimeType: 'image/png' }] };
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
   server.registerTool('list_devices', {
     title: 'List open devices',
     description: 'Return the devices currently open in a preview session.',
