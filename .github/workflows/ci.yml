@@ -58,13 +58,13 @@ jobs:
       - name: Allow unprivileged user namespaces for Chromium
         if: runner.os == 'Linux'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      - name: Desktop and MCP tests (Linux)
+      - name: Screenshot and MCP tests (Linux)
         if: runner.os == 'Linux'
         run: |
-          xvfb-run -a npm run test:desktop
-          xvfb-run -a npm run test:mcp
-      - name: Desktop and MCP tests (macOS)
+          xvfb-run -a -s "-screen 0 1920x1080x24" npx electron test/desktop-screenshot.mjs
+          xvfb-run -a -s "-screen 0 1920x1080x24" npm run test:mcp
+      - name: Screenshot and MCP tests (macOS)
         if: runner.os == 'macOS'
         run: |
-          npm run test:desktop
+          npx electron test/desktop-screenshot.mjs
           npm run test:mcp
