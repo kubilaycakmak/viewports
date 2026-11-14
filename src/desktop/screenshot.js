@@ -1,6 +1,6 @@
 const MAX_SCROLL_STEPS = 60;
 const MAX_PIXELS = 16_000_000;
-const SCROLL_SETTLE_MS = 100;
+const SCROLL_SETTLE_MS = 200;
 
 // Capture the live WebContents so cookies, navigation and device emulation are retained.
 export async function captureScreenshot(contents, frame, mode) {
@@ -14,7 +14,9 @@ export async function captureScreenshot(contents, frame, mode) {
     return contents.executeJavaScript(expression);
   };
   let original;
+  const wasThrottled = contents.backgroundThrottling;
   try {
+    if (mode === 'full-page') contents.setBackgroundThrottling(false);
     original = await evaluate('({ x: scrollX, y: scrollY })');
     if (mode === 'full-page') {
       let reachedBottom = false;
@@ -37,6 +39,7 @@ export async function captureScreenshot(contents, frame, mode) {
       }
       if (!reachedBottom) throw new Error('Page did not reach the bottom within the scrolling limit.');
       await evaluate("scrollTo({top: 0, left: 0, behavior: 'instant'})");
+      await new Promise(resolve => setTimeout(resolve, SCROLL_SETTLE_MS));
     }
     const metrics = await contents.debugger.sendCommand('Page.getLayoutMetrics');
     const height = mode === 'viewport' ? frame.viewportHeight : Math.max(frame.viewportHeight, Math.ceil(metrics.cssContentSize.height));
@@ -54,6 +57,7 @@ export async function captureScreenshot(contents, frame, mode) {
     if (original && mode === 'full-page' && !navigated && !contents.isDestroyed()) {
       await contents.executeJavaScript(`scrollTo({left: ${original.x}, top: ${original.y}, behavior: 'instant'})`).catch(() => {});
     }
+    if (mode === 'full-page' && !contents.isDestroyed()) contents.setBackgroundThrottling(wasThrottled);
     contents.removeListener('did-start-navigation', onNavigate);
   }
 }

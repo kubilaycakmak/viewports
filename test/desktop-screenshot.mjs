@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { app, BrowserWindow, Menu, nativeImage } from 'electron';
+import { access, mkdtemp, readFile, rm, rmdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { app, BrowserWindow, dialog, Menu, nativeImage } from 'electron';
 import { captureScreenshot } from '../src/desktop/screenshot.js';
 import { presentationFor } from '../src/desktop/presentation.js';
 
@@ -41,6 +44,7 @@ try {
   const frame = presentationFor({ id: 'iphone-se', type: 'mobile', width: 375, height: 667 });
   await contents.executeJavaScript('scrollTo(0, 300)');
   const before = await contents.executeJavaScript('scrollY');
+  const throttled = contents.backgroundThrottling;
   const size = data => {
     const bytes = Buffer.from(data, 'base64');
     assert.equal(bytes.subarray(1, 4).toString(), 'PNG');
@@ -55,9 +59,35 @@ try {
   const offset = (2900 * full[0] + 200) * 4;
   assert.deepEqual([...bitmap.subarray(offset, offset + 4)], [0, 255, 0, 255], 'Lazy-loaded content is missing');
   assert.equal(await contents.executeJavaScript('scrollY'), before);
+  assert.equal(contents.backgroundThrottling, throttled);
+  const directory = await mkdtemp(join(tmpdir(), 'viewports-screenshot-test-'));
+  const output = join(directory, 'capture.png');
+  const originalSave = dialog.showSaveDialog;
+  const originalError = dialog.showErrorBox;
+  try {
+    dialog.showSaveDialog = async () => ({ canceled: false, filePath: output });
+    dialog.showErrorBox = (title, message) => { throw new Error(`${title}: ${message}`); };
+    for (const [label, expected] of [['Visible viewport', visible], ['Full page', full]]) {
+      const deviceMenu = Menu.getApplicationMenu().items.find(item => item.label === 'Screenshot')
+        .submenu.items.find(item => item.label === 'iPhone SE');
+      deviceMenu.submenu.items.find(item => item.label.startsWith(label)).click();
+      for (let i = 0; i < 200; i++) {
+        if (await access(output).then(() => true, () => false)) break;
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      assert.deepEqual(size((await readFile(output)).toString('base64')), expected);
+      await rm(output);
+    }
+  } finally {
+    dialog.showSaveDialog = originalSave;
+    dialog.showErrorBox = originalError;
+    await rm(output, { force: true });
+    await rmdir(directory);
+  }
   await contents.executeJavaScript("document.body.style.height = '100000px'");
   await assert.rejects(captureScreenshot(contents, frame, 'full-page'), /size limit/);
   assert.equal(await contents.executeJavaScript('scrollY'), before);
+  assert.equal(contents.backgroundThrottling, throttled);
   console.log('Desktop screenshot capture test passed.', { visible, full });
 } finally {
   server.closeAllConnections();
