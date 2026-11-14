@@ -58,7 +58,7 @@
     .window-controls .minimize::before { background: #febc2e; }
     .window-controls button:focus-visible { outline: 2px solid white; border-radius: 4px; }
     .window-title { margin-left: 6px; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-    body.desktop-window .window-controls { display: none; }
+    body.desktop-window .window-controls, body.native-window-controls .window-controls { display: none; }
 
     .device {
       position: absolute;
@@ -311,6 +311,7 @@
 
     device.classList.add(params.get('kind'));
     document.body.classList.toggle('desktop-window', params.get('kind') === 'desktop');
+    document.body.classList.toggle('native-window-controls', params.get('controlsHeight') === '0');
     document.documentElement.style.setProperty('--controls-height', params.get('controlsHeight') + 'px');
     document.querySelector('.window-title').textContent = params.get('name');
     for (const action of ['close', 'minimize']) {

@@ -52,7 +52,7 @@ async function run() {
 
     for (const width of [250, frame.width, 550, 300]) {
       const height = Math.round(width * frame.height / frame.width);
-      window.setContentSize(width, height + WINDOW_CONTROLS_HEIGHT);
+      window.setContentSize(width, height + (process.platform === 'win32' ? 0 : WINDOW_CONTROLS_HEIGHT));
       await waitFor(() => window.getContentSize()[0] === width);
       // Allow the resize event and compositor update to finish before capturing.
       await new Promise(resolve => setTimeout(resolve, 300));

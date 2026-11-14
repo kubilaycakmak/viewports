@@ -11,6 +11,7 @@ import { captureScreenshot } from './screenshot.js';
 const PADDING = 20;
 const GAP = 12;
 const TITLE_BAR_SPACE = 48;
+const windowControlsHeight = frame => frame.bezel && process.platform !== 'win32' ? WINDOW_CONTROLS_HEIGHT : 0;
 const windows = new Map();
 const opening = new Map();
 const capturing = new Set();
@@ -131,6 +132,15 @@ async function toggleDevice(device) {
   }
 }
 
+function keepWindowOnDisplay(window) {
+  if (window.isDestroyed()) return;
+  const bounds = window.getBounds();
+  const area = screen.getDisplayMatching(bounds).workArea;
+  const x = Math.max(area.x, Math.min(bounds.x, area.x + area.width - bounds.width));
+  const y = Math.max(area.y, Math.min(bounds.y, area.y + area.height - bounds.height));
+  if (x !== bounds.x || y !== bounds.y) window.setPosition(x, y);
+}
+
 function addDevice(device) {
   if (opening.has(device.id)) return opening.get(device.id);
   if (windows.has(device.id)) return Promise.resolve();
@@ -138,7 +148,7 @@ function addDevice(device) {
   const operation = Promise.resolve().then(async () => {
     const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
     const frame = presentationFor(device, currentAreas);
-    const controlsHeight = frame.bezel ? WINDOW_CONTROLS_HEIGHT : 0;
+    const controlsHeight = windowControlsHeight(frame);
     const scale = Math.min(1, (workArea.width - 2 * PADDING) / frame.width,
       (workArea.height - 2 * PADDING - TITLE_BAR_SPACE - controlsHeight) / frame.height);
     const width = Math.ceil(frame.width * scale);
@@ -152,6 +162,7 @@ function addDevice(device) {
     };
     const window = await openWindow(device, targetUrl, bounds);
     window.show();
+    keepWindowOnDisplay(window);
   }).finally(() => {
     opening.delete(device.id);
     updateMenu();
@@ -321,7 +332,7 @@ async function startControl() {
 async function applyMetrics(window, device) {
   const { contents, view, screenView, frame } = previews.get(window);
   const [width, height] = window.getContentSize();
-  const controlsHeight = frame.bezel ? WINDOW_CONTROLS_HEIGHT : 0;
+  const controlsHeight = windowControlsHeight(frame);
   const scale = Math.min(width / frame.width, (height - controlsHeight) / frame.height);
   if (scale <= 0) return;
 
@@ -437,7 +448,8 @@ async function openWindow(device, url, bounds) {
   contents.on('did-navigate-in-page', (event, address, isMainFrame) => {
     if (isMainFrame) updateAddress(event, address);
   });
-  window.setAspectRatio(frame.width / frame.height, { width: 0, height: frame.bezel ? WINDOW_CONTROLS_HEIGHT : 0 });
+  window.setAspectRatio(frame.width / frame.height, { width: 0, height: windowControlsHeight(frame) });
+  keepWindowOnDisplay(window);
 
   try {
     if (view) {
@@ -445,7 +457,7 @@ async function openWindow(device, url, bounds) {
         id: device.id,
         name: device.name,
         kind: frame.kind,
-        controlsHeight: String(frame.bezel ? WINDOW_CONTROLS_HEIGHT : 0),
+        controlsHeight: String(windowControlsHeight(frame)),
         width: String(frame.width),
         height: String(frame.height),
         top: String(frame.top),
@@ -488,7 +500,7 @@ function layoutDevices(devices, workArea) {
       + GAP * (row.length - 1)));
     const height = rows.reduce((sum, row) => sum + Math.max(...row.map(device => presentationFor(device).height)), 0);
     const controlsHeight = rows.reduce((sum, row) =>
-      sum + (row.some(device => presentationFor(device).bezel) ? WINDOW_CONTROLS_HEIGHT : 0), 0);
+      sum + Math.max(...row.map(device => windowControlsHeight(presentationFor(device)))), 0);
     const scale = Math.min(1, availableWidth / width,
       (availableHeight - controlsHeight - rows.length * TITLE_BAR_SPACE - (rows.length - 1) * GAP) / height);
     if (!best || scale > best.scale) best = { rows, scale };
@@ -501,13 +513,13 @@ function layoutDevices(devices, workArea) {
     for (const device of row) {
       const frame = presentationFor(device);
       const width = Math.ceil(frame.width * best.scale);
-      const height = Math.ceil(frame.height * best.scale) + (frame.bezel ? WINDOW_CONTROLS_HEIGHT : 0);
+      const height = Math.ceil(frame.height * best.scale) + windowControlsHeight(frame);
       placements.push({ device, bounds: { x, y, width, height } });
       x += width + GAP;
     }
     y += Math.max(...row.map(device => {
       const frame = presentationFor(device);
-      return Math.ceil(frame.height * best.scale) + (frame.bezel ? WINDOW_CONTROLS_HEIGHT : 0);
+      return Math.ceil(frame.height * best.scale) + windowControlsHeight(frame);
     })) + TITLE_BAR_SPACE + GAP;
   }
   return { ...best, placements };
@@ -564,7 +576,10 @@ app.whenReady().then(async () => {
     openWindow(device, targetUrl, bounds)));
 
   updateMenu();
-  for (const window of opened) window.show();
+  for (const window of opened) {
+    window.show();
+    keepWindowOnDisplay(window);
+  }
   if (controlled) await startControl();
   report({ ready: true });
 }).catch(error => {

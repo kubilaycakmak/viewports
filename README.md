@@ -33,7 +33,7 @@ The first desktop launch downloads Electron. Viewports retries temporary downloa
 - Choose whether to display the simulated top and bottom device areas. Desktop previews have a top address bar and no bottom area.
 - Enter an address in any visible address bar to navigate all windows in the session.
 - Set the browser default text size to **Default**, **Large**, or **Extra Large**. Text explicitly sized in CSS pixels may remain unchanged.
-- Use the close and minimize controls above phone and tablet previews. The rounded device frames are illustrative.
+- Use the window controls above phone and tablet previews. Windows uses the native title bar controls. The rounded device frames are illustrative.
 - Use the **Screenshot** application menu to save the visible viewport or the full page of an open device as a PNG.
 
 ```bash

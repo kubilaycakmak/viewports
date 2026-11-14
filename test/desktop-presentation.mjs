@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { app, BrowserWindow, Menu } from 'electron';
+import { app, BrowserWindow, Menu, screen } from 'electron';
 import { ALL_DEVICES } from '../src/public/devices.js';
 import { presentationFor } from '../src/desktop/presentation.js';
 
@@ -53,6 +53,12 @@ async function run() {
     });
 
     for (const { window, contents } of all) {
+      const bounds = window.getBounds();
+      const area = screen.getDisplayMatching(bounds).workArea;
+      assert.ok(bounds.x >= area.x && bounds.y >= area.y
+        && bounds.x + bounds.width <= area.x + area.width
+        && bounds.y + bounds.height <= area.y + area.height,
+      `${window.getTitle()} is outside the display work area: ${JSON.stringify({ bounds, area })}`);
       const device = ALL_DEVICES.find(item => item.name === window.getTitle());
       assert.ok(device, window.getTitle());
       const frame = presentationFor(device);
@@ -185,12 +191,14 @@ async function run() {
       addedPhone.webContents.sendInputEvent({ type: 'mouseUp', ...point, button: 'left', clickCount: 1 });
     }
     assert.equal(await addedPhone.webContents.executeJavaScript(
-      "getComputedStyle(document.querySelector('.window-controls')).display"), 'flex');
-    await clickWindowControl('.window-controls .minimize');
+      "getComputedStyle(document.querySelector('.window-controls')).display"), process.platform === 'win32' ? 'none' : 'flex');
+    if (process.platform === 'win32') addedPhone.minimize();
+    else await clickWindowControl('.window-controls .minimize');
     await waitFor(() => addedPhone.isMinimized());
     addedPhone.restore();
     await waitFor(() => !addedPhone.isMinimized());
-    await clickWindowControl('.window-controls .close');
+    if (process.platform === 'win32') addedPhone.close();
+    else await clickWindowControl('.window-controls .close');
     await waitFor(() => addedPhone.isDestroyed());
     assert.ok(!phone.window.isDestroyed(), 'Closing one preview should not close other devices');
     console.log('Desktop presentation test passed.');
