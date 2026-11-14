@@ -39,3 +39,32 @@ jobs:
       - run: npm ci
       - run: npm run test:desktop
       - run: npm run test:mcp
+
+  desktop-other-platforms:
+    name: Desktop and MCP / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          cache: npm
+      - run: npm ci
+      - name: Allow unprivileged user namespaces for Chromium
+        if: runner.os == 'Linux'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Desktop and MCP tests (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          xvfb-run -a npm run test:desktop
+          xvfb-run -a npm run test:mcp
+      - name: Desktop and MCP tests (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          npm run test:desktop
+          npm run test:mcp
