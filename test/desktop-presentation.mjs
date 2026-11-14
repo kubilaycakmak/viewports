@@ -172,19 +172,18 @@ async function run() {
       getComputedStyle(document.getElementById('relative')).fontSize,
       getComputedStyle(document.getElementById('fixed')).fontSize
     ]`), [402, 738, '24px', '16px']);
-    phone.window.focus();
-    phone.contents.focus();
-    await waitFor(() => phone.window.isFocused() && phone.contents.isFocused());
     const position = await phone.contents.executeJavaScript(`(() => {
       const rect = document.getElementById('click').getBoundingClientRect();
       return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
     })()`);
-    // sendInputEvent uses emulated CSS coordinates, not the scaled view bounds.
-    const x = Math.round(position.x);
-    const y = Math.round(position.y);
-    phone.contents.sendInputEvent({ type: 'mouseMove', x, y });
-    phone.contents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
-    phone.contents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+    const { x, y } = position;
+    await phone.contents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+    await phone.contents.debugger.sendCommand('Input.dispatchMouseEvent', {
+      type: 'mousePressed', x, y, button: 'left', clickCount: 1,
+    });
+    await phone.contents.debugger.sendCommand('Input.dispatchMouseEvent', {
+      type: 'mouseReleased', x, y, button: 'left', clickCount: 1,
+    });
     await waitFor(() => phone.contents.executeJavaScript('window.clicked === true'));
     const nextUrl = url + 'another-page';
     await desktop.window.webContents.executeJavaScript(`(() => {
