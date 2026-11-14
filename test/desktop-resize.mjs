@@ -76,6 +76,28 @@ async function run() {
       assert.deepEqual([...bitmap.subarray(offset, offset + 4)], [32, 16, 11, 255],
         `Preview did not fill the bottom-right corner at width ${width}`);
     }
+
+    // Windows can report a content size whose aspect differs from the device.
+    // The entire shell must stay visible after such a resize.
+    window.setContentSize(373, 674 + (process.platform === 'win32' ? 0 : WINDOW_CONTROLS_HEIGHT));
+    await waitFor(async () => window.webContents.executeJavaScript(`(() => {
+      const rect = document.getElementById('device').getBoundingClientRect();
+      return rect.right <= innerWidth + 1 && rect.bottom <= innerHeight + 1;
+    })()`));
+    const shell = await window.webContents.executeJavaScript(`(() => {
+      const rect = document.getElementById('device').getBoundingClientRect();
+      return { right: rect.right, bottom: rect.bottom, width: innerWidth, height: innerHeight };
+    })()`);
+    assert.ok(shell.right <= shell.width + 1 && shell.bottom <= shell.height + 1,
+      `Device shell extends outside the window: ${JSON.stringify(shell)}`);
+    const rendererRecovered = await window.webContents.executeJavaScript(`(() => {
+      const device = document.getElementById('device');
+      device.style.setProperty('--scale', '2');
+      dispatchEvent(new Event('resize'));
+      const rect = device.getBoundingClientRect();
+      return rect.right <= innerWidth + 1 && rect.bottom <= innerHeight + 1;
+    })()`);
+    assert.ok(rendererRecovered, 'Renderer should fit the device without a main-process metrics update');
     console.log('Desktop resize test passed.');
   } finally {
     server.closeAllConnections();

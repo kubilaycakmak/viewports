@@ -325,6 +325,21 @@
     device.style.setProperty('--bottom', params.get('bottom') + 'px');
     device.style.setProperty('--status-height', params.get('top') + 'px');
 
+    // Fit the shell in the renderer as well as the preview view in the main process.
+    // Native window resizing can finish before the main process updates its metrics.
+    function fitDevice() {
+      const width = Number(device.style.getPropertyValue('--width'));
+      const height = Number(device.style.getPropertyValue('--height'));
+      const controls = Number(params.get('controlsHeight'));
+      if (!width || !height) return;
+      device.style.setProperty('--scale', Math.min(
+        window.innerWidth / width,
+        (window.innerHeight - controls) / height,
+      ));
+    }
+    window.addEventListener('resize', fitDevice);
+    fitDevice();
+
     const inputs = [...document.querySelectorAll('.url')];
     let currentAddress;
     function showAddress(address) {

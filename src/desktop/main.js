@@ -381,11 +381,12 @@ async function applyMetrics(window, device) {
       `(() => {
         const element = document.getElementById('device');
         element.style.setProperty('--width', '${frame.width}');
-        element.style.setProperty('--scale', ${JSON.stringify(scale)});
+        element.style.setProperty('--height', '${frame.height}');
         element.style.setProperty('--status-height', '${frame.top}px');
         element.style.setProperty('--bottom', '${frame.bottom}px');
         element.classList.toggle('hide-top', ${frame.top === 0});
         element.classList.toggle('hide-bottom', ${frame.bottom === 0});
+        fitDevice();
       })()`,
     );
   }
