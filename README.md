@@ -29,11 +29,12 @@ The first desktop launch downloads Electron. Viewports retries temporary downloa
 ## Desktop previews
 
 - Open separate device windows, move them around your desktop, and resize them while preserving their viewport dimensions.
-- Add or remove devices from the CLI or the **Devices** application menu.
+- Add or remove devices from the CLI or the **Devices** menu. In the desktop menu, **Devices → Foldables → iPhone Duo** switches between folded and unfolded previews; clicking the selected state closes it. The CLI and MCP keep both preset IDs available.
 - Choose whether to display the simulated top and bottom device areas. Desktop previews have a top address bar and no bottom area.
 - Enter an address in any visible address bar to navigate all windows in the session.
 - Set the browser default text size to **Default**, **Large**, or **Extra Large**. Text explicitly sized in CSS pixels may remain unchanged.
-- Use the close and minimize controls above phone and tablet previews. The rounded device frames are illustrative.
+- Use the window controls above phone and tablet previews. On Windows, the single preview toolbar also has **Devices**, **Screenshot**, and **More** menus; **More** contains text size, device areas, view, and window commands. The rounded device frames are illustrative.
+- Use the **Screenshot** menu to save the visible viewport or the full page of an open device as a PNG.
 
 ```bash
 npx @kubilaycakmak/viewports@latest http://localhost:3000/checkout --devices iphone-17,desktop-hd --text-size large --areas top
@@ -57,11 +58,15 @@ Add Viewports to your local MCP client:
 }
 ```
 
-Ask your agent to open a URL on the devices you want. `open_preview` creates the windows and returns a session ID. Use `add_device`, `remove_device`, `list_devices`, `set_device_areas`, `set_text_size`, and `navigate_preview` to manage that session. Run the MCP server on the computer where you want the windows to appear. Windows stay open when the MCP connection ends.
+Ask your agent to open a URL on the devices you want. `open_preview` creates the windows and returns a session ID. Use `add_device`, `remove_device`, `list_devices`, `set_device_areas`, `set_text_size`, and `navigate_preview` to manage that session. `capture_screenshot` returns a PNG image for an open device in `viewport` or `full-page` mode. Run the MCP server on the computer where you want the windows to appear. Windows stay open when the MCP connection ends.
+
+On Linux, MCP clients that filter environment variables must pass the desktop session's `DISPLAY` and, when applicable, `XAUTHORITY`, `WAYLAND_DISPLAY`, and `XDG_RUNTIME_DIR` to the server so Electron can connect to the display.
+
+Full-page capture scrolls the main document to trigger lazy loading, then restores its original position. It limits scrolling to 60 steps and images to 16 million pixels and 6 MB; an error is returned when a limit is exceeded. Content that loads slowly, nested scroll containers, animations, and fixed or sticky elements may not appear as expected. Captures include page content, not the simulated device frame. Avoid sharing screenshots containing sensitive information.
 
 ## Device presets
 
-The table lists simulated screen sizes in CSS pixels; browser controls reduce the visible page viewport. Foldable open and closed states are separate presets. They do not simulate the hinge, posture APIs, or automatic switching between screens.
+The table lists simulated screen sizes in CSS pixels; browser controls reduce the visible page viewport. Foldable open and closed states are separate presets for the CLI and MCP. The desktop menu switches iPhone Duo between those states. The presets do not simulate the hinge or posture APIs.
 
 iPhone Duo presets use [WebKit's Safari 27.1 portrait viewport measurements](https://webkit.org/blog/18486/webkit-features-for-safari-27-1/): 382 × 580 folded and 669 × 867 unfolded when both device areas are shown. Its unfolded screen dimensions are approximate. Other foldable CSS sizes are estimates; actual values can vary with browser UI and display zoom.
 
@@ -104,7 +109,7 @@ iPhone Duo presets use [WebKit's Safari 27.1 portrait viewport measurements](htt
 | Desktop | Desktop 2K | 2560 | 1440 |
 | Desktop | Desktop 4K | 3840 | 2160 |
 
-Previews run in Chromium with a representative user agent and touch emulation. Device frames, browser controls, text scaling, and pixel ratios are approximations; they do not reproduce every hardware or browser behavior. Validate device-specific behavior on real hardware or a platform simulator. On macOS and supported Linux desktops, outer window corners are transparent; Windows retains its native rectangular frame.
+Previews run in Chromium with a representative user agent and touch emulation. Device frames, browser controls, text scaling, and pixel ratios are approximations; they do not reproduce every hardware or browser behavior. Validate device-specific behavior on real hardware or a platform simulator. Phone and tablet preview windows use transparent outer corners on Windows, macOS, and supported Linux desktops.
 
 ## Browser canvas
 

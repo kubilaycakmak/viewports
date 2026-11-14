@@ -6,7 +6,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 
 const server = createServer((request, response) => {
   response.writeHead(200, { 'Content-Type': 'text/html' });
-  response.end('<!doctype html><title>Viewports MCP test</title><h1>MCP preview</h1>');
+  response.end('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Viewports MCP test</title><style>body{height:1800px;background:linear-gradient(red,blue)}</style><h1>MCP preview</h1>');
 });
 await new Promise((resolve, reject) => {
   server.once('error', reject);
@@ -15,14 +15,21 @@ await new Promise((resolve, reject) => {
 const transport = new StdioClientTransport({
   command: process.execPath,
   args: [fileURLToPath(new URL('../bin/viewports.js', import.meta.url)), 'mcp'],
+  // The MCP SDK intentionally filters its inherited environment, including DISPLAY on Linux.
+  ...(process.platform === 'linux' ? { env: Object.fromEntries(
+    ['DISPLAY', 'XAUTHORITY', 'WAYLAND_DISPLAY', 'XDG_RUNTIME_DIR']
+      .filter(name => process.env[name]).map(name => [name, process.env[name]]),
+  ) } : {}),
   stderr: 'pipe',
 });
 transport.stderr.on('data', chunk => process.stderr.write(chunk));
 const client = new Client({ name: 'viewports-test', version: '1.0.0' });
+const testSessions = new Set();
 
 async function call(name, args) {
   const result = await client.callTool({ name, arguments: args });
   assert.notEqual(result.isError, true, JSON.stringify(result));
+  if (name === 'open_preview') testSessions.add(result.structuredContent.sessionId);
   return result.structuredContent;
 }
 
@@ -33,6 +40,18 @@ try {
   const opened = await call('open_preview', { url, devices: ['iphone-se', 'desktop-hd'], textSize: 'large' });
   sessionId = opened.sessionId;
   assert.equal(opened.textSize, 'large');
+  const screenshot = await client.callTool({ name: 'capture_screenshot', arguments: { sessionId, device: 'iphone-se', mode: 'viewport' } });
+  assert.notEqual(screenshot.isError, true, JSON.stringify(screenshot));
+  assert.equal(screenshot.content[0].type, 'image');
+  assert.equal(screenshot.content[0].mimeType, 'image/png');
+  const visible = Buffer.from(screenshot.content[0].data, 'base64');
+  assert.equal(visible.subarray(1, 4).toString(), 'PNG');
+  const fullScreenshot = await client.callTool({ name: 'capture_screenshot', arguments: { sessionId, device: 'iphone-se', mode: 'full-page' } });
+  assert.notEqual(fullScreenshot.isError, true, JSON.stringify(fullScreenshot));
+  const full = Buffer.from(fullScreenshot.content[0].data, 'base64');
+  assert.ok(full.readUInt32BE(20) > visible.readUInt32BE(20));
+  const closedDevice = await client.callTool({ name: 'capture_screenshot', arguments: { sessionId, device: 'ipad-mini', mode: 'viewport' } });
+  assert.equal(closedDevice.isError, true);
   assert.deepEqual(opened.areas, { top: true, bottom: true });
   assert.equal(opened.devices[1].viewportHeight, 1032);
   const nextUrl = url + 'mcp-navigation';
@@ -94,6 +113,15 @@ try {
   await call('remove_device', { sessionId: plain.sessionId, device: 'iphone-se' });
   console.log('MCP desktop session test passed.');
 } finally {
+  // MCP windows deliberately survive disconnects; close test-owned windows even after a failed assertion.
+  for (const id of testSessions) {
+    try {
+      const state = await call('list_devices', { sessionId: id });
+      for (const device of state.devices) await call('remove_device', { sessionId: id, device });
+    } catch (error) {
+      console.error(`Could not close test preview ${id}: ${error.message}`);
+    }
+  }
   await client.close();
   server.closeAllConnections();
   server.close();

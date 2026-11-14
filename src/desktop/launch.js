@@ -95,7 +95,7 @@ export async function launchDesktop({ url, devices, textSize = 'default', areas 
                 const timer = setTimeout(() => {
                   pending.delete(id);
                   rejectRequest(new Error('Preview session did not respond.'));
-                }, 15_000);
+                }, action === 'screenshot' ? 45_000 : 15_000);
                 pending.set(id, {
                   resolve: value => { clearTimeout(timer); resolveRequest(value); },
                   reject: error => { clearTimeout(timer); rejectRequest(error); },

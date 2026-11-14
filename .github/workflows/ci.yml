@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [master]
   pull_request:
   workflow_dispatch:
 
@@ -39,3 +40,32 @@ jobs:
       - run: npm ci
       - run: npm run test:desktop
       - run: npm run test:mcp
+
+  desktop-other-platforms:
+    name: Desktop and MCP / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          cache: npm
+      - run: npm ci
+      - name: Allow unprivileged user namespaces for Chromium
+        if: runner.os == 'Linux'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Screenshot and MCP tests (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          xvfb-run -a -s "-screen 0 1920x1080x24" npx electron test/desktop-screenshot.mjs
+          xvfb-run -a -s "-screen 0 1920x1080x24" npm run test:mcp
+      - name: Screenshot and MCP tests (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          npx electron test/desktop-screenshot.mjs
+          npm run test:mcp

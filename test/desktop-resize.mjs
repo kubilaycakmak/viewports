@@ -19,6 +19,17 @@ async function waitFor(check) {
   throw new Error('Timed out waiting for the preview.');
 }
 
+async function captureAfterResize(contents) {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      return await contents.capturePage();
+    } catch (error) {
+      if (error.message !== 'UnknownVizError' || attempt === 9) throw error;
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  }
+}
+
 async function run() {
   const server = createServer((request, response) => {
     response.writeHead(200, { 'Content-Type': 'text/html' });
@@ -60,7 +71,7 @@ async function run() {
       const viewport = await contents.executeJavaScript('[window.innerWidth, window.innerHeight, screen.width, screen.height]');
       assert.deepEqual(viewport, [frame.viewportWidth, frame.viewportHeight, device.width, device.height]);
 
-      const image = await contents.capturePage();
+      const image = await captureAfterResize(contents);
       const size = image.getSize();
       const factor = screen.getDisplayMatching(window.getBounds()).scaleFactor;
       const scale = Math.min(width / frame.width, height / frame.height);
@@ -76,6 +87,28 @@ async function run() {
       assert.deepEqual([...bitmap.subarray(offset, offset + 4)], [32, 16, 11, 255],
         `Preview did not fill the bottom-right corner at width ${width}`);
     }
+
+    // Windows can report a content size whose aspect differs from the device.
+    // The entire shell must stay visible after such a resize.
+    window.setContentSize(373, 674 + WINDOW_CONTROLS_HEIGHT);
+    await waitFor(async () => window.webContents.executeJavaScript(`(() => {
+      const rect = document.getElementById('device').getBoundingClientRect();
+      return rect.right <= innerWidth + 1 && rect.bottom <= innerHeight + 1;
+    })()`));
+    const shell = await window.webContents.executeJavaScript(`(() => {
+      const rect = document.getElementById('device').getBoundingClientRect();
+      return { right: rect.right, bottom: rect.bottom, width: innerWidth, height: innerHeight };
+    })()`);
+    assert.ok(shell.right <= shell.width + 1 && shell.bottom <= shell.height + 1,
+      `Device shell extends outside the window: ${JSON.stringify(shell)}`);
+    const rendererRecovered = await window.webContents.executeJavaScript(`(() => {
+      const device = document.getElementById('device');
+      device.style.setProperty('--scale', '2');
+      dispatchEvent(new Event('resize'));
+      const rect = device.getBoundingClientRect();
+      return rect.right <= innerWidth + 1 && rect.bottom <= innerHeight + 1;
+    })()`);
+    assert.ok(rendererRecovered, 'Renderer should fit the device without a main-process metrics update');
     console.log('Desktop resize test passed.');
   } finally {
     server.closeAllConnections();

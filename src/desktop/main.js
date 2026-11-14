@@ -1,16 +1,21 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, screen, View, WebContentsView } from 'electron';
 import { createInterface } from 'node:readline';
 import { createConnection } from 'node:net';
+import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { ALL_DEVICES, DEVICE_GROUPS } from '../public/devices.js';
 import { createPreviewRequest, STARTUP_MESSAGE } from './request.js';
 import { DEFAULT_AREAS, mobileUserAgent, presentationFor, TEXT_SIZES, WINDOW_CONTROLS_HEIGHT } from './presentation.js';
+import { captureScreenshot } from './screenshot.js';
 
 const PADDING = 20;
 const GAP = 12;
 const TITLE_BAR_SPACE = 48;
+const windowControlsHeight = frame => frame.bezel ? WINDOW_CONTROLS_HEIGHT : 0;
+const duoDevices = ALL_DEVICES.filter(device => device.id.startsWith('iphone-duo-'));
 const windows = new Map();
 const opening = new Map();
+const capturing = new Set();
 const previews = new WeakMap();
 const chromePath = fileURLToPath(new URL('./chrome.html', import.meta.url));
 const preloadPath = fileURLToPath(new URL('./preload.cjs', import.meta.url));
@@ -31,13 +36,36 @@ function updateMenu() {
       label: 'Devices',
       submenu: DEVICE_GROUPS.map(group => ({
         label: group.label,
-        submenu: group.devices.map(device => ({
-          label: `${device.name}  (${device.width} × ${device.height})`,
-          type: 'checkbox',
-          checked: windows.has(device.id),
-          enabled: !opening.has(device.id),
-          click: () => toggleDevice(device),
-        })),
+        submenu: [
+          ...(group.label === 'Foldables' ? [{
+            label: 'iPhone Duo',
+            submenu: duoDevices.map(device => ({
+              label: `${device.id === 'iphone-duo-folded' ? 'Folded' : 'Unfolded'}  (${device.width} × ${device.height})`,
+              type: 'checkbox',
+              checked: windows.has(device.id),
+              enabled: !opening.has(device.id),
+              click: () => toggleDevice(device),
+            })),
+          }] : []),
+          ...group.devices.filter(device => !device.id.startsWith('iphone-duo-')).map(device => ({
+            label: `${device.name}  (${device.width} × ${device.height})`,
+            type: 'checkbox',
+            checked: windows.has(device.id),
+            enabled: !opening.has(device.id),
+            click: () => toggleDevice(device),
+          })),
+        ],
+      })),
+    },
+    {
+      label: 'Screenshot',
+      submenu: [...windows.keys()].map(id => ({
+        label: ALL_DEVICES.find(device => device.id === id)?.name ?? id,
+        enabled: !capturing.has(id),
+        submenu: [
+          { label: 'Visible viewport…', click: () => saveScreenshot(id, 'viewport') },
+          { label: 'Full page…', click: () => saveScreenshot(id, 'full-page') },
+        ],
       })),
     },
     {
@@ -68,10 +96,40 @@ function updateMenu() {
         },
       ],
     },
-    { role: 'viewMenu' },
-    { role: 'windowMenu' },
   );
+  menu.push({ role: 'viewMenu' }, { role: 'windowMenu' });
   Menu.setApplicationMenu(Menu.buildFromTemplate(menu));
+}
+
+async function captureDevice(id, mode) {
+  const window = windows.get(id);
+  const preview = window && previews.get(window);
+  if (!window || window.isDestroyed() || !preview) throw new Error('Device is not open.');
+  if (capturing.has(id)) throw new Error('A screenshot is already in progress for this device.');
+  capturing.add(id);
+  updateMenu();
+  try {
+    const data = await captureScreenshot(preview.contents, preview.frame, mode);
+    if (Buffer.byteLength(data, 'base64') > 6_000_000) throw new Error('Screenshot exceeds the output size limit.');
+    return data;
+  } finally {
+    capturing.delete(id);
+    updateMenu();
+  }
+}
+
+async function saveScreenshot(id, mode) {
+  try {
+    const result = await dialog.showSaveDialog(windows.get(id), {
+      title: 'Save screenshot', defaultPath: `viewports-${id}-${mode}.png`,
+      filters: [{ name: 'PNG image', extensions: ['png'] }],
+    });
+    if (result.canceled || !result.filePath) return;
+    const data = await captureDevice(id, mode);
+    await writeFile(result.filePath, Buffer.from(data, 'base64'));
+  } catch (error) {
+    dialog.showErrorBox('Could not save screenshot', error.message);
+  }
 }
 
 async function toggleDevice(device) {
@@ -79,34 +137,70 @@ async function toggleDevice(device) {
     if (windows.has(device.id)) {
       await removeDevice(device);
     } else {
-      await addDevice(device);
+      let previousBounds;
+      if (device.id.startsWith('iphone-duo-')) {
+        const other = duoDevices.find(candidate => candidate.id !== device.id);
+        if (opening.has(other.id)) await opening.get(other.id);
+        const previous = windows.get(other.id);
+        if (previous) {
+          previousBounds = previous.getBounds();
+          await removeDevice(other);
+        }
+      }
+      await addDevice(device, previousBounds);
     }
   } catch (error) {
     dialog.showErrorBox('Could not update device', error.message);
   }
 }
 
-function addDevice(device) {
+function keepWindowOnDisplay(window) {
+  if (window.isDestroyed()) return;
+  const bounds = window.getBounds();
+  const area = screen.getDisplayMatching(bounds).workArea;
+  const x = Math.max(area.x, Math.min(bounds.x, area.x + area.width - bounds.width));
+  const y = Math.max(area.y, Math.min(bounds.y, area.y + area.height - bounds.height));
+  if (x !== bounds.x || y !== bounds.y) window.setPosition(x, y);
+}
+
+function applyInitialSize(window, bounds, frame) {
+  if (process.platform !== 'win32') return;
+  window.setContentSize(bounds.width, bounds.height);
+  // Windows can impose a minimum width or change the content height while showing a window.
+  const [width, height] = window.getContentSize();
+  const controls = windowControlsHeight(frame);
+  const adjustedHeight = Math.ceil(frame.height * width / frame.width) + controls;
+  if (Math.abs(height - adjustedHeight) <= 1) return;
+  const area = screen.getDisplayMatching(window.getBounds()).workArea;
+  const outerHeight = window.getBounds().height;
+  if (adjustedHeight + outerHeight - height <= area.height) {
+    window.setContentSize(width, adjustedHeight);
+  }
+}
+
+function addDevice(device, previousBounds) {
   if (opening.has(device.id)) return opening.get(device.id);
   if (windows.has(device.id)) return Promise.resolve();
 
   const operation = Promise.resolve().then(async () => {
     const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
     const frame = presentationFor(device, currentAreas);
-    const controlsHeight = frame.bezel ? WINDOW_CONTROLS_HEIGHT : 0;
-    const scale = Math.min(1, (workArea.width - 2 * PADDING) / frame.width,
+    const controlsHeight = windowControlsHeight(frame);
+    const scale = Math.min(frame.displayScale ?? 1, (workArea.width - 2 * PADDING) / frame.width,
       (workArea.height - 2 * PADDING - TITLE_BAR_SPACE - controlsHeight) / frame.height);
     const width = Math.ceil(frame.width * scale);
     const height = Math.ceil(frame.height * scale) + controlsHeight;
     const offset = Math.min(windows.size * 32, 160);
     const bounds = {
-      x: workArea.x + Math.min(PADDING + offset, workArea.width - width - PADDING),
-      y: workArea.y + Math.min(PADDING + offset, workArea.height - height - TITLE_BAR_SPACE),
+      x: previousBounds?.x ?? workArea.x + Math.min(PADDING + offset, workArea.width - width - PADDING),
+      y: previousBounds?.y ?? workArea.y + Math.min(PADDING + offset, workArea.height - height - TITLE_BAR_SPACE),
       width,
       height,
     };
     const window = await openWindow(device, targetUrl, bounds);
     window.show();
+    applyInitialSize(window, bounds, frame);
+    keepWindowOnDisplay(window);
   }).finally(() => {
     opening.delete(device.id);
     updateMenu();
@@ -179,7 +273,23 @@ function setAreas(areas) {
         const preview = previews.get(window);
         const device = ALL_DEVICES.find(item => item.id === id);
         if (!window.isDestroyed() && preview?.contents.debugger.isAttached()) {
-          preview.frame = presentationFor(device, value);
+          const previousFrame = preview.frame;
+          const nextFrame = presentationFor(device, value);
+          if (previousFrame.width !== nextFrame.width) {
+            const [width, height] = window.getContentSize();
+            const scale = Math.min(width / previousFrame.width,
+              (height - windowControlsHeight(previousFrame)) / previousFrame.height);
+            window.setAspectRatio(nextFrame.width / nextFrame.height,
+              { width: 0, height: windowControlsHeight(nextFrame) });
+            const targetSize = {
+              width: Math.round(nextFrame.width * scale),
+              height: Math.round(nextFrame.height * scale) + windowControlsHeight(nextFrame),
+            };
+            if (process.platform === 'win32') applyInitialSize(window, targetSize, nextFrame);
+            else window.setContentSize(targetSize.width, targetSize.height);
+            keepWindowOnDisplay(window);
+          }
+          preview.frame = nextFrame;
           await scheduleMetrics(window, device);
         }
       }));
@@ -244,7 +354,11 @@ async function startControl() {
       let message;
       try {
         message = JSON.parse(line);
-        if (message.action === 'text-size') {
+        if (message.action === 'screenshot') {
+          const data = await captureDevice(message.device, message.value);
+          report({ id: message.id, data });
+          return;
+        } else if (message.action === 'text-size') {
           await setTextSize(message.value);
         } else if (message.action === 'areas') {
           await setAreas(message.value);
@@ -272,15 +386,15 @@ async function startControl() {
 async function applyMetrics(window, device) {
   const { contents, view, screenView, frame } = previews.get(window);
   const [width, height] = window.getContentSize();
-  const controlsHeight = frame.bezel ? WINDOW_CONTROLS_HEIGHT : 0;
+  const controlsHeight = windowControlsHeight(frame);
   const scale = Math.min(width / frame.width, (height - controlsHeight) / frame.height);
   if (scale <= 0) return;
 
   if (view) {
     const x = Math.round(frame.bezel * scale);
-    const y = controlsHeight + Math.round(frame.bezel * scale);
-    const screenWidth = Math.max(1, Math.round(device.width * scale));
-    const screenHeight = Math.max(1, Math.round(device.height * scale));
+    const y = controlsHeight + Math.round(frame.screenTop * scale);
+    const screenWidth = Math.max(1, Math.round(frame.viewportWidth * scale));
+    const screenHeight = Math.max(1, Math.round(frame.screenHeight * scale));
     const top = Math.round(frame.top * scale);
     screenView.setBounds({ x, y, width: screenWidth, height: screenHeight });
     screenView.setBorderRadius(Math.round(frame.screenRadius * scale));
@@ -293,11 +407,15 @@ async function applyMetrics(window, device) {
     await window.webContents.executeJavaScript(
       `(() => {
         const element = document.getElementById('device');
-        element.style.setProperty('--scale', ${JSON.stringify(scale)});
+        element.style.setProperty('--width', '${frame.width}');
+        element.style.setProperty('--height', '${frame.height}');
+        element.style.setProperty('--screen-top', '${frame.screenTop}px');
+        element.style.setProperty('--screen-bottom', '${frame.screenBottom}px');
         element.style.setProperty('--status-height', '${frame.top}px');
-        element.style.setProperty('--bottom', '${frame.bottom}px');
+        element.style.setProperty('--bottom', '${frame.visualBottom}px');
         element.classList.toggle('hide-top', ${frame.top === 0});
         element.classList.toggle('hide-bottom', ${frame.bottom === 0});
+        fitDevice();
       })()`,
     );
   }
@@ -346,8 +464,9 @@ async function openWindow(device, url, bounds) {
     useContentSize: true,
     resizable: true,
     show: false,
-    transparent: frame.bezel > 0 && process.platform !== 'win32',
-    backgroundColor: frame.bezel > 0 && process.platform !== 'win32' ? '#00000000' : '#09090b',
+    frame: !(frame.bezel > 0 && process.platform === 'win32'),
+    transparent: frame.bezel > 0,
+    backgroundColor: frame.bezel > 0 ? '#00000000' : '#09090b',
     webPreferences: {
       sandbox: true,
       contextIsolation: true,
@@ -388,7 +507,8 @@ async function openWindow(device, url, bounds) {
   contents.on('did-navigate-in-page', (event, address, isMainFrame) => {
     if (isMainFrame) updateAddress(event, address);
   });
-  window.setAspectRatio(frame.width / frame.height, { width: 0, height: frame.bezel ? WINDOW_CONTROLS_HEIGHT : 0 });
+  window.setAspectRatio(frame.width / frame.height, { width: 0, height: windowControlsHeight(frame) });
+  keepWindowOnDisplay(window);
 
   try {
     if (view) {
@@ -396,11 +516,14 @@ async function openWindow(device, url, bounds) {
         id: device.id,
         name: device.name,
         kind: frame.kind,
-        controlsHeight: String(frame.bezel ? WINDOW_CONTROLS_HEIGHT : 0),
+        controlsHeight: String(windowControlsHeight(frame)),
+        customWindowsChrome: String(process.platform === 'win32' && frame.bezel > 0),
         width: String(frame.width),
         height: String(frame.height),
         top: String(frame.top),
-        bottom: String(frame.bottom),
+        bottom: String(frame.visualBottom),
+        screenTop: String(frame.screenTop ?? 0),
+        screenBottom: String(frame.screenBottom ?? 0),
         url,
         outerRadius: String(frame.outerRadius),
         screenRadius: String(frame.screenRadius),
@@ -435,11 +558,17 @@ function layoutDevices(devices, workArea) {
     for (let index = 0; index < devices.length; index += columns) {
       rows.push(devices.slice(index, index + columns));
     }
-    const width = Math.max(...rows.map(row => row.reduce((sum, device) => sum + presentationFor(device).width, 0)
+    const width = Math.max(...rows.map(row => row.reduce((sum, device) => {
+      const frame = presentationFor(device);
+      return sum + frame.width * (frame.displayScale ?? 1);
+    }, 0)
       + GAP * (row.length - 1)));
-    const height = rows.reduce((sum, row) => sum + Math.max(...row.map(device => presentationFor(device).height)), 0);
+    const height = rows.reduce((sum, row) => sum + Math.max(...row.map(device => {
+      const frame = presentationFor(device);
+      return frame.height * (frame.displayScale ?? 1);
+    })), 0);
     const controlsHeight = rows.reduce((sum, row) =>
-      sum + (row.some(device => presentationFor(device).bezel) ? WINDOW_CONTROLS_HEIGHT : 0), 0);
+      sum + Math.max(...row.map(device => windowControlsHeight(presentationFor(device)))), 0);
     const scale = Math.min(1, availableWidth / width,
       (availableHeight - controlsHeight - rows.length * TITLE_BAR_SPACE - (rows.length - 1) * GAP) / height);
     if (!best || scale > best.scale) best = { rows, scale };
@@ -451,14 +580,14 @@ function layoutDevices(devices, workArea) {
     let x = workArea.x + PADDING;
     for (const device of row) {
       const frame = presentationFor(device);
-      const width = Math.ceil(frame.width * best.scale);
-      const height = Math.ceil(frame.height * best.scale) + (frame.bezel ? WINDOW_CONTROLS_HEIGHT : 0);
+      const width = Math.ceil(frame.width * best.scale * (frame.displayScale ?? 1));
+      const height = Math.ceil(frame.height * best.scale * (frame.displayScale ?? 1)) + windowControlsHeight(frame);
       placements.push({ device, bounds: { x, y, width, height } });
       x += width + GAP;
     }
     y += Math.max(...row.map(device => {
       const frame = presentationFor(device);
-      return Math.ceil(frame.height * best.scale) + (frame.bezel ? WINDOW_CONTROLS_HEIGHT : 0);
+      return Math.ceil(frame.height * best.scale * (frame.displayScale ?? 1)) + windowControlsHeight(frame);
     })) + TITLE_BAR_SPACE + GAP;
   }
   return { ...best, placements };
@@ -481,6 +610,15 @@ app.whenReady().then(async () => {
     if (!window || !previews.get(window)?.frame.bezel) return;
     if (action === 'minimize') window.minimize();
     if (action === 'close') window.close();
+  });
+  ipcMain.on('viewports:menu-popup', (event, label, x, y) => {
+    const window = shellWindow(event);
+    if (!window || process.platform !== 'win32' || !previews.get(window)?.frame.bezel) return;
+    if (!['Devices', 'Screenshot', 'More'].includes(label)) return;
+    const menu = Menu.getApplicationMenu();
+    const popup = label === 'More' ? menu : menu?.items.find(item => item.label === label)?.submenu;
+    if (!popup) return;
+    popup.popup({ window, x: Math.max(0, Math.round(x)), y: Math.max(0, Math.round(y)) });
   });
   ipcMain.handle('viewports:navigate', async (event, address) => {
     if (!shellWindow(event)) return { ok: false, error: 'Navigation is unavailable.' };
@@ -509,13 +647,19 @@ app.whenReady().then(async () => {
   currentTextSize = request.textSize;
   currentAreas = request.areas;
 
+  updateMenu();
   const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   const layout = layoutDevices(request.devices, workArea);
   const opened = await Promise.all(layout.placements.map(({ device, bounds }) =>
     openWindow(device, targetUrl, bounds)));
 
   updateMenu();
-  for (const window of opened) window.show();
+  for (const [index, window] of opened.entries()) {
+    window.show();
+    const placement = layout.placements[index];
+    applyInitialSize(window, placement.bounds, presentationFor(placement.device, currentAreas));
+    keepWindowOnDisplay(window);
+  }
   if (controlled) await startControl();
   report({ ready: true });
 }).catch(error => {

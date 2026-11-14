@@ -58,7 +58,47 @@
     .window-controls .minimize::before { background: #febc2e; }
     .window-controls button:focus-visible { outline: 2px solid white; border-radius: 4px; }
     .window-title { margin-left: 6px; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-    body.desktop-window .window-controls { display: none; }
+    body.desktop-window .window-controls, body.native-window-controls .window-controls { display: none; }
+
+    .window-menu { display: none; }
+    body.custom-windows-chrome .window-controls {
+      gap: 0;
+      padding: 0 4px;
+      border-radius: 0;
+    }
+    body.custom-windows-chrome .window-title {
+      flex: 1;
+      min-width: 42px;
+      margin-left: 6px;
+    }
+    body.custom-windows-chrome .window-menu {
+      display: flex;
+      app-region: no-drag;
+      -webkit-app-region: no-drag;
+    }
+    body.custom-windows-chrome .window-menu button {
+      width: auto;
+      padding: 0 7px;
+      color: #eee;
+      font: inherit;
+      font-size: 11px;
+    }
+    body.custom-windows-chrome .window-menu button::before,
+    body.custom-windows-chrome .window-controls .close::before,
+    body.custom-windows-chrome .window-controls .minimize::before { display: none; }
+    body.custom-windows-chrome .window-controls .close,
+    body.custom-windows-chrome .window-controls .minimize {
+      color: #eee;
+      font-size: 18px;
+    }
+    body.custom-windows-chrome .window-controls .minimize::after { content: '−'; }
+    body.custom-windows-chrome .window-controls .close::after { content: '×'; }
+    body.custom-windows-chrome .window-controls .close:hover { background: #c42b32; }
+    body.custom-windows-chrome .window-controls .minimize:hover,
+    body.custom-windows-chrome .window-menu button:hover { background: #39393d; }
+    body:not(.custom-windows-chrome) .window-controls .close { order: 1; }
+    body:not(.custom-windows-chrome) .window-controls .minimize { order: 2; }
+    body:not(.custom-windows-chrome) .window-title { order: 3; }
 
     .device {
       position: absolute;
@@ -75,7 +115,10 @@
 
     .screen {
       position: absolute;
-      inset: 8px;
+      top: var(--screen-top);
+      right: 8px;
+      bottom: var(--screen-bottom);
+      left: 8px;
       overflow: hidden;
       border-radius: var(--screen-radius);
       background: #f4f4f6;
@@ -272,15 +315,50 @@
       padding-top: 0;
       font-size: 11px;
     }
+
+    .speaker, .home-button { display: none; }
+
+    .se .speaker {
+      position: absolute;
+      top: 30px;
+      left: 50%;
+      display: block;
+      width: 54px;
+      height: 5px;
+      transform: translateX(-50%);
+      border-radius: 5px;
+      background: #333338;
+    }
+
+    .se .home-button {
+      position: absolute;
+      bottom: 13px;
+      left: 50%;
+      display: block;
+      width: 39px;
+      height: 39px;
+      transform: translateX(-50%);
+      border: 2px solid #4b4b50;
+      border-radius: 50%;
+    }
+
+    .se .gesture { display: none; }
   </style>
 </head>
 <body>
   <div class="window-controls" role="toolbar" aria-label="Window controls">
-    <button type="button" class="close" aria-label="Close preview" title="Close preview"></button>
-    <button type="button" class="minimize" aria-label="Minimize preview" title="Minimize preview"></button>
     <span class="window-title"></span>
+    <nav class="window-menu" aria-label="Preview menu">
+      <button type="button" data-menu="Devices">Devices</button>
+      <button type="button" data-menu="Screenshot">Screenshot</button>
+      <button type="button" data-menu="More">More</button>
+    </nav>
+    <button type="button" class="minimize" aria-label="Minimize preview" title="Minimize preview"></button>
+    <button type="button" class="close" aria-label="Close preview" title="Close preview"></button>
   </div>
   <div class="device" id="device">
+    <span class="speaker" aria-hidden="true"></span>
+    <span class="home-button" aria-hidden="true"></span>
     <div class="screen">
       <div class="status">
         <span>9:41</span>
@@ -311,18 +389,43 @@
 
     device.classList.add(params.get('kind'));
     document.body.classList.toggle('desktop-window', params.get('kind') === 'desktop');
+    document.body.classList.toggle('native-window-controls', params.get('controlsHeight') === '0');
+    document.body.classList.toggle('custom-windows-chrome', params.get('customWindowsChrome') === 'true');
     document.documentElement.style.setProperty('--controls-height', params.get('controlsHeight') + 'px');
     document.querySelector('.window-title').textContent = params.get('name');
     for (const action of ['close', 'minimize']) {
       document.querySelector(`.window-controls .${action}`).addEventListener('click', () => window.viewports.windowAction(action));
     }
+    for (const button of document.querySelectorAll('.window-menu button')) {
+      button.addEventListener('click', () => {
+        const rect = button.getBoundingClientRect();
+        window.viewports.popupMenu(button.dataset.menu, rect.left, rect.bottom);
+      });
+    }
     if (params.get('id') === 'iphone-se') device.classList.add('se');
     device.style.setProperty('--width', params.get('width'));
     device.style.setProperty('--height', params.get('height'));
+    device.style.setProperty('--screen-top', params.get('screenTop') + 'px');
+    device.style.setProperty('--screen-bottom', params.get('screenBottom') + 'px');
     device.style.setProperty('--outer-radius', params.get('outerRadius') + 'px');
     device.style.setProperty('--screen-radius', params.get('screenRadius') + 'px');
     device.style.setProperty('--bottom', params.get('bottom') + 'px');
     device.style.setProperty('--status-height', params.get('top') + 'px');
+
+    // Fit the shell in the renderer as well as the preview view in the main process.
+    // Native window resizing can finish before the main process updates its metrics.
+    function fitDevice() {
+      const width = Number(device.style.getPropertyValue('--width'));
+      const height = Number(device.style.getPropertyValue('--height'));
+      const controls = Number(params.get('controlsHeight'));
+      if (!width || !height) return;
+      device.style.setProperty('--scale', Math.min(
+        window.innerWidth / width,
+        (window.innerHeight - controls) / height,
+      ));
+    }
+    window.addEventListener('resize', fitDevice);
+    fitDevice();
 
     const inputs = [...document.querySelectorAll('.url')];
     let currentAddress;

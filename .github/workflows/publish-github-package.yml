@@ -1,0 +1,32 @@
+name: Publish GitHub Package
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@kubilaycakmak'
+      - name: Verify release tag matches package version
+        run: |
+          node -e "const version = require('./package.json').version; if (process.env.GITHUB_REF_NAME !== 'v' + version) { console.error('Release tag does not match package version'); process.exit(1); }"
+      - run: npm ci
+      - name: Publish to GitHub Packages
+        run: npm publish --registry=https://npm.pkg.github.com
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify published version
+        run: npm view "@kubilaycakmak/viewports@${GITHUB_REF_NAME#v}" version --registry=https://npm.pkg.github.com
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,6 +1,6 @@
 {
   "name": "@kubilaycakmak/viewports",
-  "version": "4.0.1",
+  "version": "4.1.0",
   "description": "Live responsive previews in desktop windows, with a CLI and MCP server",
   "type": "module",
   "bin": {
@@ -11,7 +11,7 @@
     "start": "node bin/viewports.js",
     "dev": "node bin/viewports.js http://localhost:3000",
     "test:install": "node --test test/install-electron.mjs",
-    "test:desktop": "electron test/desktop-resize.mjs && electron test/desktop-presentation.mjs",
+    "test:desktop": "electron test/desktop-resize.mjs && electron test/desktop-presentation.mjs && electron test/desktop-corners.mjs && electron test/desktop-screenshot.mjs",
     "test:mcp": "node test/mcp-desktop.mjs"
   },
   "dependencies": {
