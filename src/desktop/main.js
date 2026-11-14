@@ -140,6 +140,21 @@ function keepWindowOnDisplay(window) {
   if (x !== bounds.x || y !== bounds.y) window.setPosition(x, y);
 }
 
+function applyInitialSize(window, bounds, frame) {
+  if (process.platform !== 'win32') return;
+  window.setContentSize(bounds.width, bounds.height);
+  // Windows may impose a minimum width. Preserve the device aspect ratio if it does.
+  const [width, height] = window.getContentSize();
+  if (width <= bounds.width) return;
+  const controls = windowControlsHeight(frame);
+  const adjustedHeight = Math.ceil(frame.height * width / frame.width) + controls;
+  const area = screen.getDisplayMatching(window.getBounds()).workArea;
+  const outerHeight = window.getBounds().height;
+  if (adjustedHeight + outerHeight - height <= area.height) {
+    window.setContentSize(width, adjustedHeight);
+  }
+}
+
 function addDevice(device) {
   if (opening.has(device.id)) return opening.get(device.id);
   if (windows.has(device.id)) return Promise.resolve();
@@ -161,7 +176,7 @@ function addDevice(device) {
     };
     const window = await openWindow(device, targetUrl, bounds);
     window.show();
-    if (process.platform === 'win32') window.setContentSize(bounds.width, bounds.height);
+    applyInitialSize(window, bounds, frame);
     keepWindowOnDisplay(window);
   }).finally(() => {
     opening.delete(device.id);
@@ -592,10 +607,8 @@ app.whenReady().then(async () => {
   updateMenu();
   for (const [index, window] of opened.entries()) {
     window.show();
-    if (process.platform === 'win32') {
-      const { width, height } = layout.placements[index].bounds;
-      window.setContentSize(width, height);
-    }
+    const placement = layout.placements[index];
+    applyInitialSize(window, placement.bounds, presentationFor(placement.device, currentAreas));
     keepWindowOnDisplay(window);
   }
   if (controlled) await startControl();

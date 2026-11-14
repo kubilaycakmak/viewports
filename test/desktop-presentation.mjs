@@ -53,6 +53,11 @@ async function run() {
     });
 
     for (const { window, contents } of all) {
+      if (process.platform === 'win32') {
+        await waitFor(() => window.webContents.executeJavaScript(`
+          Math.abs(document.body.clientWidth - document.getElementById('device').getBoundingClientRect().width) <= 2
+        `));
+      }
       const bounds = window.getBounds();
       const area = screen.getDisplayMatching(bounds).workArea;
       assert.ok(bounds.x >= area.x && bounds.y >= area.y

@@ -36,7 +36,8 @@ try {
   assert.ok(contents, 'Preview did not open');
   let menu;
   for (let i = 0; i < 300 && !menu; i++) {
-    menu = Menu.getApplicationMenu()?.items.find(item => item.label === 'Screenshot');
+    const candidate = Menu.getApplicationMenu()?.items.find(item => item.label === 'Screenshot');
+    menu = candidate?.submenu.items.some(item => item.label === 'iPhone SE') ? candidate : undefined;
     if (!menu) await new Promise(resolve => setTimeout(resolve, 50));
   }
   assert.ok(menu, 'Screenshot menu did not appear');
