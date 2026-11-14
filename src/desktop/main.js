@@ -365,7 +365,7 @@ async function applyMetrics(window, device) {
 
   if (view) {
     const x = Math.round(frame.bezel * scale);
-    const y = controlsHeight + Math.round(frame.bezel * scale);
+    const y = controlsHeight + Math.round(frame.screenTop * scale);
     const screenWidth = Math.max(1, Math.round(frame.viewportWidth * scale));
     const screenHeight = Math.max(1, Math.round(device.height * scale));
     const top = Math.round(frame.top * scale);
@@ -382,6 +382,8 @@ async function applyMetrics(window, device) {
         const element = document.getElementById('device');
         element.style.setProperty('--width', '${frame.width}');
         element.style.setProperty('--height', '${frame.height}');
+        element.style.setProperty('--screen-top', '${frame.screenTop}px');
+        element.style.setProperty('--screen-bottom', '${frame.screenBottom}px');
         element.style.setProperty('--status-height', '${frame.top}px');
         element.style.setProperty('--bottom', '${frame.bottom}px');
         element.classList.toggle('hide-top', ${frame.top === 0});
@@ -491,6 +493,8 @@ async function openWindow(device, url, bounds) {
         height: String(frame.height),
         top: String(frame.top),
         bottom: String(frame.bottom),
+        screenTop: String(frame.screenTop ?? 0),
+        screenBottom: String(frame.screenBottom ?? 0),
         url,
         outerRadius: String(frame.outerRadius),
         screenRadius: String(frame.screenRadius),

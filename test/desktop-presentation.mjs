@@ -72,6 +72,10 @@ async function run() {
         screenRadius: getComputedStyle(document.querySelector('.screen')).borderTopLeftRadius,
         contentWidth: document.body.clientWidth,
         deviceWidth: document.getElementById('device').getBoundingClientRect().width,
+        deviceRect: (() => { const { right, bottom } = document.getElementById('device').getBoundingClientRect(); return { right, bottom }; })(),
+        screenRect: (() => { const { x, y, width, height } = document.querySelector('.screen').getBoundingClientRect(); return { x, y, width, height }; })(),
+        innerWidth,
+        innerHeight,
       })`);
       assert.equal(shell.outerRadius, `${frame.outerRadius}px`);
       assert.equal(shell.screenRadius, `${frame.screenRadius}px`);
@@ -81,6 +85,13 @@ async function run() {
       }
       const screenView = window.contentView.children.find(item => item.children.some(child => child.webContents === contents));
       assert.ok(screenView, 'Preview should be clipped by its device screen');
+      assert.ok(shell.deviceRect.right <= shell.innerWidth + 1 && shell.deviceRect.bottom <= shell.innerHeight + 1,
+        `${device.name} shell extends outside its window: ${JSON.stringify(shell)}`);
+      const viewBounds = screenView.getBounds();
+      for (const key of ['x', 'y', 'width', 'height']) {
+        assert.ok(Math.abs(viewBounds[key] - shell.screenRect[key]) <= 2,
+          `${device.name} preview screen is misaligned at ${key}: ${JSON.stringify({ viewBounds, shell })}`);
+      }
       const contentView = screenView.children.find(child => child.webContents === contents);
       assert.equal(contentView.getBounds().width, screenView.getBounds().width,
         `${device.name} preview should fill the screen width`);
@@ -199,6 +210,15 @@ async function run() {
       .find(item => item.label.startsWith('iPhone SE ')).click();
     const addedPhone = await waitFor(() => BrowserWindow.getAllWindows().find(window => window.getTitle() === 'iPhone SE'
       && previewViews(window.contentView).some(view => view.webContents?.getURL() === redirectedUrl || view.webContents?.getURL() === url + 'redirect')));
+    const seFrame = presentationFor(ALL_DEVICES.find(item => item.id === 'iphone-se'));
+    assert.deepEqual(await addedPhone.webContents.executeJavaScript(`[
+      getComputedStyle(document.querySelector('.speaker')).display,
+      getComputedStyle(document.querySelector('.home-button')).display,
+      getComputedStyle(document.querySelector('.gesture')).display,
+      Math.round(document.querySelector('.screen').getBoundingClientRect().top
+        - document.getElementById('device').getBoundingClientRect().top)
+    ]`), ['block', 'block', 'none', Math.round(seFrame.screenTop
+      * addedPhone.getContentSize()[0] / seFrame.width)]);
     async function clickWindowControl(selector) {
       addedPhone.focus();
       addedPhone.webContents.focus();

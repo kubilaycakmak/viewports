@@ -30,6 +30,8 @@ export function presentationFor(device, areas = DEFAULT_AREAS) {
       top,
       bottom: 0,
       bezel: 0,
+      screenTop: 0,
+      screenBottom: 0,
       kind: 'desktop',
       pixelRatio: 0,
       outerRadius: 0,
@@ -40,6 +42,9 @@ export function presentationFor(device, areas = DEFAULT_AREAS) {
   const ios = device.id.startsWith('iphone');
   const tablet = device.type === 'tablet';
   const bezel = 8;
+  const classicIPhone = device.id === 'iphone-se';
+  const screenTop = classicIPhone ? 62 : bezel;
+  const screenBottom = classicIPhone ? 62 : bezel;
   let top = 80;
   let bottom = 24;
   let kind = 'android';
@@ -74,12 +79,14 @@ export function presentationFor(device, areas = DEFAULT_AREAS) {
   const viewportWidth = device.id === 'iphone-duo-folded' && (areas.top || areas.bottom) ? 382 : device.width;
   return {
     width: viewportWidth + bezel * 2,
-    height: device.height + bezel * 2,
+    height: device.height + screenTop + screenBottom,
     viewportWidth,
     viewportHeight: device.height - top - bottom,
     top,
     bottom,
     bezel,
+    screenTop,
+    screenBottom,
     kind,
     pixelRatio,
     outerRadius,

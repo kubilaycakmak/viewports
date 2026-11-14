@@ -75,7 +75,10 @@
 
     .screen {
       position: absolute;
-      inset: 8px;
+      top: var(--screen-top);
+      right: 8px;
+      bottom: var(--screen-bottom);
+      left: 8px;
       overflow: hidden;
       border-radius: var(--screen-radius);
       background: #f4f4f6;
@@ -272,6 +275,34 @@
       padding-top: 0;
       font-size: 11px;
     }
+
+    .speaker, .home-button { display: none; }
+
+    .se .speaker {
+      position: absolute;
+      top: 30px;
+      left: 50%;
+      display: block;
+      width: 54px;
+      height: 5px;
+      transform: translateX(-50%);
+      border-radius: 5px;
+      background: #333338;
+    }
+
+    .se .home-button {
+      position: absolute;
+      bottom: 13px;
+      left: 50%;
+      display: block;
+      width: 39px;
+      height: 39px;
+      transform: translateX(-50%);
+      border: 2px solid #4b4b50;
+      border-radius: 50%;
+    }
+
+    .se .gesture { display: none; }
   </style>
 </head>
 <body>
@@ -281,6 +312,8 @@
     <span class="window-title"></span>
   </div>
   <div class="device" id="device">
+    <span class="speaker" aria-hidden="true"></span>
+    <span class="home-button" aria-hidden="true"></span>
     <div class="screen">
       <div class="status">
         <span>9:41</span>
@@ -320,6 +353,8 @@
     if (params.get('id') === 'iphone-se') device.classList.add('se');
     device.style.setProperty('--width', params.get('width'));
     device.style.setProperty('--height', params.get('height'));
+    device.style.setProperty('--screen-top', params.get('screenTop') + 'px');
+    device.style.setProperty('--screen-bottom', params.get('screenBottom') + 'px');
     device.style.setProperty('--outer-radius', params.get('outerRadius') + 'px');
     device.style.setProperty('--screen-radius', params.get('screenRadius') + 'px');
     device.style.setProperty('--bottom', params.get('bottom') + 'px');
