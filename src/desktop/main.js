@@ -83,9 +83,8 @@ function updateMenu() {
         },
       ],
     },
-    { role: 'viewMenu' },
-    { role: 'windowMenu' },
   );
+  menu.push({ role: 'viewMenu' }, { role: 'windowMenu' });
   Menu.setApplicationMenu(Menu.buildFromTemplate(menu));
 }
 
@@ -162,6 +161,7 @@ function addDevice(device) {
     };
     const window = await openWindow(device, targetUrl, bounds);
     window.show();
+    if (process.platform === 'win32') window.setContentSize(bounds.width, bounds.height);
     keepWindowOnDisplay(window);
   }).finally(() => {
     opening.delete(device.id);
@@ -235,7 +235,19 @@ function setAreas(areas) {
         const preview = previews.get(window);
         const device = ALL_DEVICES.find(item => item.id === id);
         if (!window.isDestroyed() && preview?.contents.debugger.isAttached()) {
-          preview.frame = presentationFor(device, value);
+          const previousFrame = preview.frame;
+          const nextFrame = presentationFor(device, value);
+          if (previousFrame.width !== nextFrame.width) {
+            const [width, height] = window.getContentSize();
+            const scale = Math.min(width / previousFrame.width,
+              (height - windowControlsHeight(previousFrame)) / previousFrame.height);
+            window.setAspectRatio(nextFrame.width / nextFrame.height,
+              { width: 0, height: windowControlsHeight(nextFrame) });
+            window.setContentSize(Math.round(nextFrame.width * scale),
+              Math.round(nextFrame.height * scale) + windowControlsHeight(nextFrame));
+            keepWindowOnDisplay(window);
+          }
+          preview.frame = nextFrame;
           await scheduleMetrics(window, device);
         }
       }));
@@ -339,7 +351,7 @@ async function applyMetrics(window, device) {
   if (view) {
     const x = Math.round(frame.bezel * scale);
     const y = controlsHeight + Math.round(frame.bezel * scale);
-    const screenWidth = Math.max(1, Math.round(device.width * scale));
+    const screenWidth = Math.max(1, Math.round(frame.viewportWidth * scale));
     const screenHeight = Math.max(1, Math.round(device.height * scale));
     const top = Math.round(frame.top * scale);
     screenView.setBounds({ x, y, width: screenWidth, height: screenHeight });
@@ -353,6 +365,7 @@ async function applyMetrics(window, device) {
     await window.webContents.executeJavaScript(
       `(() => {
         const element = document.getElementById('device');
+        element.style.setProperty('--width', '${frame.width}');
         element.style.setProperty('--scale', ${JSON.stringify(scale)});
         element.style.setProperty('--status-height', '${frame.top}px');
         element.style.setProperty('--bottom', '${frame.bottom}px');
@@ -570,14 +583,19 @@ app.whenReady().then(async () => {
   currentTextSize = request.textSize;
   currentAreas = request.areas;
 
+  updateMenu();
   const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   const layout = layoutDevices(request.devices, workArea);
   const opened = await Promise.all(layout.placements.map(({ device, bounds }) =>
     openWindow(device, targetUrl, bounds)));
 
   updateMenu();
-  for (const window of opened) {
+  for (const [index, window] of opened.entries()) {
     window.show();
+    if (process.platform === 'win32') {
+      const { width, height } = layout.placements[index].bounds;
+      window.setContentSize(width, height);
+    }
     keepWindowOnDisplay(window);
   }
   if (controlled) await startControl();

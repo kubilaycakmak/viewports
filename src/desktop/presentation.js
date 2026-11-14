@@ -71,10 +71,11 @@ export function presentationFor(device, areas = DEFAULT_AREAS) {
   if (!areas.top) top = 0;
   if (!areas.bottom) bottom = 0;
 
+  const viewportWidth = device.id === 'iphone-duo-folded' && (areas.top || areas.bottom) ? 382 : device.width;
   return {
-    width: device.width + bezel * 2,
+    width: viewportWidth + bezel * 2,
     height: device.height + bezel * 2,
-    viewportWidth: device.id === 'iphone-duo-folded' && (areas.top || areas.bottom) ? 382 : device.width,
+    viewportWidth,
     viewportHeight: device.height - top - bottom,
     top,
     bottom,

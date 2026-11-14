@@ -65,11 +65,20 @@ async function run() {
       const shell = await window.webContents.executeJavaScript(`({
         outerRadius: getComputedStyle(document.getElementById('device')).borderTopLeftRadius,
         screenRadius: getComputedStyle(document.querySelector('.screen')).borderTopLeftRadius,
+        contentWidth: document.body.clientWidth,
+        deviceWidth: document.getElementById('device').getBoundingClientRect().width,
       })`);
       assert.equal(shell.outerRadius, `${frame.outerRadius}px`);
       assert.equal(shell.screenRadius, `${frame.screenRadius}px`);
+      if (process.platform === 'win32') {
+        assert.ok(Math.abs(shell.contentWidth - shell.deviceWidth) <= 2,
+          `${device.name} has unused space beside the device: ${JSON.stringify(shell)}`);
+      }
       const screenView = window.contentView.children.find(item => item.children.some(child => child.webContents === contents));
       assert.ok(screenView, 'Preview should be clipped by its device screen');
+      const contentView = screenView.children.find(child => child.webContents === contents);
+      assert.equal(contentView.getBounds().width, screenView.getBounds().width,
+        `${device.name} preview should fill the screen width`);
       const state = await contents.executeJavaScript(`({
         innerWidth, innerHeight, screenWidth: screen.width, screenHeight: screen.height,
         ratio: devicePixelRatio, userAgent: navigator.userAgent, touches: navigator.maxTouchPoints,
@@ -116,6 +125,12 @@ async function run() {
       "getComputedStyle(document.querySelector('.top-address')).display"), 'none');
     await toggleArea('Bottom Area', false, 874);
     await waitFor(async () => (await duoFolded.contents.executeJavaScript('innerWidth')) === 466);
+    const foldedShell = await duoFolded.window.webContents.executeJavaScript(`({
+      contentWidth: document.body.clientWidth,
+      deviceWidth: document.getElementById('device').getBoundingClientRect().width,
+    })`);
+    assert.ok(Math.abs(foldedShell.contentWidth - foldedShell.deviceWidth) <= 2,
+      `Folded preview has unused space after hiding device areas: ${JSON.stringify(foldedShell)}`);
     assert.deepEqual(await phone.window.webContents.executeJavaScript(`[
       document.getElementById('device').classList.contains('hide-top'),
       document.getElementById('device').classList.contains('hide-bottom')
