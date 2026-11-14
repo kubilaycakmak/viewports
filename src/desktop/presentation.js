@@ -32,6 +32,8 @@ export function presentationFor(device, areas = DEFAULT_AREAS) {
       bezel: 0,
       screenTop: 0,
       screenBottom: 0,
+      screenHeight: device.height,
+      visualBottom: 0,
       kind: 'desktop',
       pixelRatio: 0,
       outerRadius: 0,
@@ -43,8 +45,6 @@ export function presentationFor(device, areas = DEFAULT_AREAS) {
   const tablet = device.type === 'tablet';
   const bezel = 8;
   const classicIPhone = device.id === 'iphone-se';
-  const screenTop = classicIPhone ? 62 : bezel;
-  const screenBottom = classicIPhone ? 62 : bezel;
   let top = 80;
   let bottom = 24;
   let kind = 'android';
@@ -77,16 +77,25 @@ export function presentationFor(device, areas = DEFAULT_AREAS) {
   if (!areas.bottom) bottom = 0;
 
   const viewportWidth = device.id === 'iphone-duo-folded' && (areas.top || areas.bottom) ? 382 : device.width;
+  const screenTop = classicIPhone ? 70 : (areas.top ? bezel : Math.max(bezel, outerRadius));
+  const screenBottom = classicIPhone ? 70 : (areas.bottom ? bezel : Math.max(bezel, outerRadius));
+  // The navigation area must cover the screen's lower rounded section.
+  // Keep the emulated page viewport unchanged by extending only the visual shell.
+  const visualBottom = areas.bottom ? Math.max(bottom, screenRadius) : 0;
+  const screenHeight = device.height + visualBottom - bottom;
   return {
     width: viewportWidth + bezel * 2,
-    height: device.height + screenTop + screenBottom,
+    height: screenHeight + screenTop + screenBottom,
     viewportWidth,
     viewportHeight: device.height - top - bottom,
     top,
     bottom,
+    visualBottom,
     bezel,
     screenTop,
     screenBottom,
+    screenHeight,
+    displayScale: classicIPhone ? 0.86 : 1,
     kind,
     pixelRatio,
     outerRadius,

@@ -19,6 +19,17 @@ async function waitFor(check) {
   throw new Error('Timed out waiting for the preview.');
 }
 
+async function captureAfterResize(contents) {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      return await contents.capturePage();
+    } catch (error) {
+      if (error.message !== 'UnknownVizError' || attempt === 9) throw error;
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  }
+}
+
 async function run() {
   const server = createServer((request, response) => {
     response.writeHead(200, { 'Content-Type': 'text/html' });
@@ -52,7 +63,7 @@ async function run() {
 
     for (const width of [250, frame.width, 550, 300]) {
       const height = Math.round(width * frame.height / frame.width);
-      window.setContentSize(width, height + (process.platform === 'win32' ? 0 : WINDOW_CONTROLS_HEIGHT));
+      window.setContentSize(width, height + WINDOW_CONTROLS_HEIGHT);
       await waitFor(() => window.getContentSize()[0] === width);
       // Allow the resize event and compositor update to finish before capturing.
       await new Promise(resolve => setTimeout(resolve, 300));
@@ -60,7 +71,7 @@ async function run() {
       const viewport = await contents.executeJavaScript('[window.innerWidth, window.innerHeight, screen.width, screen.height]');
       assert.deepEqual(viewport, [frame.viewportWidth, frame.viewportHeight, device.width, device.height]);
 
-      const image = await contents.capturePage();
+      const image = await captureAfterResize(contents);
       const size = image.getSize();
       const factor = screen.getDisplayMatching(window.getBounds()).scaleFactor;
       const scale = Math.min(width / frame.width, height / frame.height);
@@ -79,7 +90,7 @@ async function run() {
 
     // Windows can report a content size whose aspect differs from the device.
     // The entire shell must stay visible after such a resize.
-    window.setContentSize(373, 674 + (process.platform === 'win32' ? 0 : WINDOW_CONTROLS_HEIGHT));
+    window.setContentSize(373, 674 + WINDOW_CONTROLS_HEIGHT);
     await waitFor(async () => window.webContents.executeJavaScript(`(() => {
       const rect = document.getElementById('device').getBoundingClientRect();
       return rect.right <= innerWidth + 1 && rect.bottom <= innerHeight + 1;

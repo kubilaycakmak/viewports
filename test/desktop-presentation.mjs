@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { app, BrowserWindow, Menu, screen } from 'electron';
+import { app, BrowserWindow, dialog, Menu, screen } from 'electron';
 import { ALL_DEVICES } from '../src/public/devices.js';
 import { presentationFor } from '../src/desktop/presentation.js';
 
@@ -141,10 +141,15 @@ async function run() {
       "getComputedStyle(document.querySelector('.top-address')).display"), 'none');
     await toggleArea('Bottom Area', false, 874);
     await waitFor(async () => (await duoFolded.contents.executeJavaScript('innerWidth')) === 466);
-    const foldedShell = await duoFolded.window.webContents.executeJavaScript(`({
+    const readFoldedShell = () => duoFolded.window.webContents.executeJavaScript(`({
       contentWidth: document.body.clientWidth,
       deviceWidth: document.getElementById('device').getBoundingClientRect().width,
     })`);
+    await waitFor(async () => {
+      const shell = await readFoldedShell();
+      return Math.abs(shell.contentWidth - shell.deviceWidth) <= 2;
+    });
+    const foldedShell = await readFoldedShell();
     assert.ok(Math.abs(foldedShell.contentWidth - foldedShell.deviceWidth) <= 2,
       `Folded preview has unused space after hiding device areas: ${JSON.stringify(foldedShell)}`);
     assert.deepEqual(await phone.window.webContents.executeJavaScript(`[
@@ -169,14 +174,15 @@ async function run() {
     ]`), [402, 738, '24px', '16px']);
     phone.window.focus();
     phone.contents.focus();
+    await waitFor(() => phone.window.isFocused() && phone.contents.isFocused());
     const position = await phone.contents.executeJavaScript(`(() => {
       const rect = document.getElementById('click').getBoundingClientRect();
       return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
     })()`);
-    const view = previewViews(phone.window.contentView).find(item => item.webContents === phone.contents);
-    const scale = view.getBounds().width / 402;
-    const x = Math.round(position.x * scale);
-    const y = Math.round(position.y * scale);
+    // sendInputEvent uses emulated CSS coordinates, not the scaled view bounds.
+    const x = Math.round(position.x);
+    const y = Math.round(position.y);
+    phone.contents.sendInputEvent({ type: 'mouseMove', x, y });
     phone.contents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
     phone.contents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
     await waitFor(() => phone.contents.executeJavaScript('window.clicked === true'));
@@ -209,7 +215,10 @@ async function run() {
     devicesMenu.submenu.items.flatMap(group => group.submenu.items)
       .find(item => item.label.startsWith('iPhone SE ')).click();
     const addedPhone = await waitFor(() => BrowserWindow.getAllWindows().find(window => window.getTitle() === 'iPhone SE'
-      && previewViews(window.contentView).some(view => view.webContents?.getURL() === redirectedUrl || view.webContents?.getURL() === url + 'redirect')));
+      && previewViews(window.contentView).some(view => view.webContents?.getURL() === redirectedUrl
+        && !view.webContents.isLoading())));
+    await waitFor(() => Menu.getApplicationMenu().items.find(item => item.label === 'Devices')
+      .submenu.items.find(item => item.label === 'Mobile').submenu.items.find(item => item.label.startsWith('iPhone SE ')).enabled);
     const seFrame = presentationFor(ALL_DEVICES.find(item => item.id === 'iphone-se'));
     assert.deepEqual(await addedPhone.webContents.executeJavaScript(`[
       getComputedStyle(document.querySelector('.speaker')).display,
@@ -219,6 +228,20 @@ async function run() {
         - document.getElementById('device').getBoundingClientRect().top)
     ]`), ['block', 'block', 'none', Math.round(seFrame.screenTop
       * addedPhone.getContentSize()[0] / seFrame.width)]);
+    if (process.platform === 'win32') {
+      assert.equal(await addedPhone.webContents.executeJavaScript(
+        "getComputedStyle(document.querySelector('.window-menu')).display"), 'flex');
+      const originalPopup = Menu.prototype.popup;
+      let openedMenu;
+      try {
+        Menu.prototype.popup = function popup() { openedMenu = this; };
+        await addedPhone.webContents.executeJavaScript("document.querySelector('[data-menu=Screenshot]').click()");
+        await waitFor(() => openedMenu);
+        assert.equal(openedMenu, Menu.getApplicationMenu().items.find(item => item.label === 'Screenshot').submenu);
+      } finally {
+        Menu.prototype.popup = originalPopup;
+      }
+    }
     async function clickWindowControl(selector) {
       addedPhone.focus();
       addedPhone.webContents.focus();
@@ -231,18 +254,35 @@ async function run() {
       addedPhone.webContents.sendInputEvent({ type: 'mouseUp', ...point, button: 'left', clickCount: 1 });
     }
     assert.equal(await addedPhone.webContents.executeJavaScript(
-      "getComputedStyle(document.querySelector('.window-controls')).display"), process.platform === 'win32' ? 'none' : 'flex');
-    if (process.platform === 'win32') addedPhone.minimize();
-    else await clickWindowControl('.window-controls .minimize');
+      "getComputedStyle(document.querySelector('.window-controls')).display"), 'flex');
+    await clickWindowControl('.window-controls .minimize');
     await waitFor(() => addedPhone.isMinimized());
     addedPhone.restore();
     await waitFor(() => !addedPhone.isMinimized());
-    if (process.platform === 'win32') addedPhone.close();
-    else await clickWindowControl('.window-controls .close');
+    await clickWindowControl('.window-controls .close');
     await waitFor(() => addedPhone.isDestroyed());
     assert.ok(!phone.window.isDestroyed(), 'Closing one preview should not close other devices');
+
+    const duoMenu = () => Menu.getApplicationMenu().items.find(item => item.label === 'Devices')
+      .submenu.items.find(item => item.label === 'Foldables').submenu.items.find(item => item.label === 'iPhone Duo');
+    assert.deepEqual(duoMenu().submenu.items.map(item => item.label.split('  ')[0]), ['Folded', 'Unfolded']);
+    duoMenu().submenu.items.find(item => item.label.startsWith('Unfolded')).click();
+    await waitFor(() => duoOpen.window.isDestroyed());
+    duoMenu().submenu.items.find(item => item.label.startsWith('Unfolded')).click();
+    const switchedOpen = await waitFor(() => BrowserWindow.getAllWindows().find(window =>
+      window.getTitle() === 'iPhone Duo (Unfolded)' && window !== duoOpen.window));
+    await waitFor(() => duoFolded.window.isDestroyed());
+    duoMenu().submenu.items.find(item => item.label.startsWith('Folded')).click();
+    await waitFor(() => switchedOpen.isDestroyed());
+    await waitFor(() => BrowserWindow.getAllWindows().some(window => window.getTitle() === 'iPhone Duo (Folded)'
+      && previewViews(window.contentView).some(view => view.webContents?.getURL() === redirectedUrl
+        && !view.webContents.isLoading())));
+    await waitFor(() => duoMenu().submenu.items.find(item => item.label.startsWith('Folded')).enabled);
+    assert.equal(BrowserWindow.getAllWindows().filter(window => window.getTitle().startsWith('iPhone Duo')).length, 1);
     console.log('Desktop presentation test passed.');
   } finally {
+    dialog.showErrorBox = () => {};
+    for (const window of BrowserWindow.getAllWindows()) window.destroy();
     server.closeAllConnections();
     server.close();
   }

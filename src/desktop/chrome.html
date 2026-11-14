@@ -60,6 +60,46 @@
     .window-title { margin-left: 6px; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
     body.desktop-window .window-controls, body.native-window-controls .window-controls { display: none; }
 
+    .window-menu { display: none; }
+    body.custom-windows-chrome .window-controls {
+      gap: 0;
+      padding: 0 4px;
+      border-radius: 0;
+    }
+    body.custom-windows-chrome .window-title {
+      flex: 1;
+      min-width: 42px;
+      margin-left: 6px;
+    }
+    body.custom-windows-chrome .window-menu {
+      display: flex;
+      app-region: no-drag;
+      -webkit-app-region: no-drag;
+    }
+    body.custom-windows-chrome .window-menu button {
+      width: auto;
+      padding: 0 7px;
+      color: #eee;
+      font: inherit;
+      font-size: 11px;
+    }
+    body.custom-windows-chrome .window-menu button::before,
+    body.custom-windows-chrome .window-controls .close::before,
+    body.custom-windows-chrome .window-controls .minimize::before { display: none; }
+    body.custom-windows-chrome .window-controls .close,
+    body.custom-windows-chrome .window-controls .minimize {
+      color: #eee;
+      font-size: 18px;
+    }
+    body.custom-windows-chrome .window-controls .minimize::after { content: '−'; }
+    body.custom-windows-chrome .window-controls .close::after { content: '×'; }
+    body.custom-windows-chrome .window-controls .close:hover { background: #c42b32; }
+    body.custom-windows-chrome .window-controls .minimize:hover,
+    body.custom-windows-chrome .window-menu button:hover { background: #39393d; }
+    body:not(.custom-windows-chrome) .window-controls .close { order: 1; }
+    body:not(.custom-windows-chrome) .window-controls .minimize { order: 2; }
+    body:not(.custom-windows-chrome) .window-title { order: 3; }
+
     .device {
       position: absolute;
       top: var(--controls-height);
@@ -307,9 +347,14 @@
 </head>
 <body>
   <div class="window-controls" role="toolbar" aria-label="Window controls">
-    <button type="button" class="close" aria-label="Close preview" title="Close preview"></button>
-    <button type="button" class="minimize" aria-label="Minimize preview" title="Minimize preview"></button>
     <span class="window-title"></span>
+    <nav class="window-menu" aria-label="Preview menu">
+      <button type="button" data-menu="Devices">Devices</button>
+      <button type="button" data-menu="Screenshot">Screenshot</button>
+      <button type="button" data-menu="More">More</button>
+    </nav>
+    <button type="button" class="minimize" aria-label="Minimize preview" title="Minimize preview"></button>
+    <button type="button" class="close" aria-label="Close preview" title="Close preview"></button>
   </div>
   <div class="device" id="device">
     <span class="speaker" aria-hidden="true"></span>
@@ -345,10 +390,17 @@
     device.classList.add(params.get('kind'));
     document.body.classList.toggle('desktop-window', params.get('kind') === 'desktop');
     document.body.classList.toggle('native-window-controls', params.get('controlsHeight') === '0');
+    document.body.classList.toggle('custom-windows-chrome', params.get('customWindowsChrome') === 'true');
     document.documentElement.style.setProperty('--controls-height', params.get('controlsHeight') + 'px');
     document.querySelector('.window-title').textContent = params.get('name');
     for (const action of ['close', 'minimize']) {
       document.querySelector(`.window-controls .${action}`).addEventListener('click', () => window.viewports.windowAction(action));
+    }
+    for (const button of document.querySelectorAll('.window-menu button')) {
+      button.addEventListener('click', () => {
+        const rect = button.getBoundingClientRect();
+        window.viewports.popupMenu(button.dataset.menu, rect.left, rect.bottom);
+      });
     }
     if (params.get('id') === 'iphone-se') device.classList.add('se');
     device.style.setProperty('--width', params.get('width'));
