@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, screen, View, WebContentsView } from 'electron';
 import { createInterface } from 'node:readline';
+import { createConnection } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { ALL_DEVICES, DEVICE_GROUPS } from '../public/devices.js';
 import { createPreviewRequest, STARTUP_MESSAGE } from './request.js';
@@ -226,8 +227,17 @@ function navigateAll(value) {
   return operation;
 }
 
-function startControl() {
-  const input = createInterface({ input: process.stdin });
+async function startControl() {
+  const stream = process.env.VIEWPORTS_CONTROL_PIPE
+    ? createConnection(process.env.VIEWPORTS_CONTROL_PIPE) : process.stdin;
+  if (stream !== process.stdin) {
+    await new Promise((resolve, reject) => {
+      stream.once('connect', resolve);
+      stream.once('error', reject);
+    });
+    stream.on('error', () => stream.destroy());
+  }
+  const input = createInterface({ input: stream });
   let queue = Promise.resolve();
   input.on('line', line => {
     queue = queue.then(async () => {
@@ -481,7 +491,9 @@ app.whenReady().then(async () => {
     }
   });
 
-  const [url, ...arguments_] = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  if (args[0] === '--') args.shift();
+  const [url, ...arguments_] = args;
   const textSizeOption = arguments_.find(value => value.startsWith('--text-size='));
   const areaOption = arguments_.find(value => value.startsWith('--areas='));
   const textSize = textSizeOption ? textSizeOption.slice('--text-size='.length) : 'default';
@@ -504,7 +516,7 @@ app.whenReady().then(async () => {
 
   updateMenu();
   for (const window of opened) window.show();
-  if (controlled) startControl();
+  if (controlled) await startControl();
   report({ ready: true });
 }).catch(error => {
   report({ error: error.message }, () => app.exit(1));

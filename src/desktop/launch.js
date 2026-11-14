@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { createServer } from 'node:net';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { ensureElectron } from './install-electron.js';
@@ -11,16 +13,33 @@ const desktopEntry = fileURLToPath(new URL('./main.js', import.meta.url));
 
 export async function launchDesktop({ url, devices, textSize = 'default', areas = DEFAULT_AREAS }, { managed = false } = {}) {
   await ensureElectron();
+  const pipeName = managed && process.platform === 'win32' ? `\\\\.\\pipe\\viewports-${randomUUID()}` : undefined;
+  let pipeServer;
+  let controlPipe;
+  if (pipeName) {
+    pipeServer = createServer(socket => {
+      if (controlPipe) return socket.destroy();
+      controlPipe = socket;
+      socket.on('error', () => {});
+      pipeServer.close();
+    });
+    await new Promise((resolve, reject) => {
+      pipeServer.once('error', reject);
+      pipeServer.listen(pipeName, resolve);
+    });
+  }
 
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
   if (managed) env.VIEWPORTS_CONTROL = 'stdio';
   else delete env.VIEWPORTS_CONTROL;
+  if (pipeName) env.VIEWPORTS_CONTROL_PIPE = pipeName;
+  else delete env.VIEWPORTS_CONTROL_PIPE;
 
   return new Promise((resolve, reject) => {
     const areaNames = ['top', 'bottom'].filter(name => areas[name]);
     const args = [
-      electronCli, desktopEntry, url, ...devices.map(({ id }) => id),
+      electronCli, desktopEntry, '--', url, ...devices.map(({ id }) => id),
       `--text-size=${textSize}`, `--areas=${areaNames.join(',') || 'none'}`,
     ];
     const child = spawn(process.execPath, args, {
@@ -43,6 +62,8 @@ export async function launchDesktop({ url, devices, textSize = 'default', areas 
       if (disconnected) return;
       disconnected = true;
       child.stdin?.end();
+      controlPipe?.end();
+      if (pipeServer?.listening) pipeServer.close();
       output.close();
       child.stdout.destroy();
       child.stderr.destroy();
@@ -79,7 +100,13 @@ export async function launchDesktop({ url, devices, textSize = 'default', areas 
                   resolve: value => { clearTimeout(timer); resolveRequest(value); },
                   reject: error => { clearTimeout(timer); rejectRequest(error); },
                 });
-                child.stdin.write(JSON.stringify({ id, action, device, value }) + '\n', error => {
+                const input = pipeName ? controlPipe : child.stdin;
+                if (!input || input.destroyed) {
+                  pending.get(id)?.reject(new Error('Preview session closed.'));
+                  pending.delete(id);
+                  return;
+                }
+                input.write(JSON.stringify({ id, action, device, value }) + '\n', error => {
                   if (error) {
                     pending.get(id)?.reject(error);
                     pending.delete(id);
