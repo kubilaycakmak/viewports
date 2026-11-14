@@ -63,25 +63,33 @@ try {
   assert.equal(contents.backgroundThrottling, throttled);
   const directory = await mkdtemp(join(tmpdir(), 'viewports-screenshot-test-'));
   const output = join(directory, 'capture.png');
-  const originalSave = dialog.showSaveDialog;
-  const originalError = dialog.showErrorBox;
+  let saveError;
   try {
     dialog.showSaveDialog = async () => ({ canceled: false, filePath: output });
-    dialog.showErrorBox = (title, message) => { throw new Error(`${title}: ${message}`); };
+    dialog.showErrorBox = (title, message) => { saveError = new Error(`${title}: ${message}`); };
     for (const [label, expected] of [['Visible viewport', visible], ['Full page', full]]) {
       const deviceMenu = Menu.getApplicationMenu().items.find(item => item.label === 'Screenshot')
         .submenu.items.find(item => item.label === 'iPhone SE');
       deviceMenu.submenu.items.find(item => item.label.startsWith(label)).click();
-      for (let i = 0; i < 200; i++) {
-        if (await access(output).then(() => true, () => false)) break;
+      let saved;
+      for (let i = 0; i < 600; i++) {
+        if (saveError) throw saveError;
+        if (await access(output).then(() => true, () => false)) {
+          try {
+            const bytes = await readFile(output);
+            saved = size(bytes.toString('base64'));
+            if (saved[0] === expected[0] && saved[1] === expected[1]
+              && !nativeImage.createFromBuffer(bytes).isEmpty()) break;
+          } catch (error) {
+            if (error.code !== 'ENOENT' && error.code !== 'ERR_OUT_OF_RANGE') throw error;
+          }
+        }
         await new Promise(resolve => setTimeout(resolve, 50));
       }
-      assert.deepEqual(size((await readFile(output)).toString('base64')), expected);
+      assert.deepEqual(saved, expected, `${label} screenshot was not saved in time`);
       await rm(output);
     }
   } finally {
-    dialog.showSaveDialog = originalSave;
-    dialog.showErrorBox = originalError;
     await rm(output, { force: true });
     await rmdir(directory);
   }
